@@ -23,6 +23,26 @@ const serviceSchema = z.object({
   status: z.enum(["active", "inactive"]).optional()
 });
 
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  photoUrl: z.string().nullable().optional(),
+  status: z.enum(["active", "inactive", "invited"]).optional(),
+  roleNames: z.array(z.string()).optional()
+});
+
+const profileSchema = z.object({
+  name: z.string().min(2).optional(),
+  photoUrl: z.string().nullable().optional()
+});
+
+const roleSchema = z.object({
+  name: z.string().min(2),
+  description: z.string().nullable().optional(),
+  permissions: z.array(z.string()).optional(),
+  status: z.enum(["active", "inactive"]).optional()
+});
+
 export async function registerRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true, service: "autonomia-admin" }));
 
@@ -54,9 +74,62 @@ export async function registerRoutes(app: FastifyInstance) {
       products: store.listProducts()
     };
   });
+  app.patch("/admin/me", async (request) => {
+    const principal = request.principal;
+    const existing = store.ensureUser({ id: principal.id, email: principal.email, name: principal.name });
+    const input = profileSchema.parse(request.body);
+    return store.upsertUser(stripUndefined({
+      id: existing.id,
+      email: existing.email,
+      name: input.name ?? existing.name,
+      photoUrl: input.photoUrl ?? existing.photoUrl ?? null,
+      status: existing.status,
+      roleNames: existing.roleNames
+    }));
+  });
 
   app.get("/admin/users", async () => store.listUsers());
+  app.post("/admin/users/invitations", async (request, reply) => {
+    const input = userSchema.parse(request.body);
+    return reply.code(201).send(store.upsertUser(stripUndefined({
+      ...input,
+      status: input.status ?? "invited",
+      roleNames: input.roleNames ?? ["Administrador"]
+    })));
+  });
+  app.patch("/admin/users/:userId", async (request) => {
+    const params = request.params as { userId: string };
+    const existing = store.listUsers().find((user) => user.id === params.userId || user.email === params.userId);
+    const input = userSchema.partial().parse(request.body);
+    return store.upsertUser(stripUndefined({
+      id: existing?.id ?? params.userId,
+      email: input.email ?? existing?.email ?? params.userId,
+      name: input.name ?? existing?.name ?? params.userId,
+      photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
+      status: input.status ?? existing?.status ?? "active",
+      roleNames: input.roleNames ?? existing?.roleNames
+    }));
+  });
   app.get("/admin/roles", async () => store.listRoles());
+  app.post("/admin/roles", async (request, reply) => {
+    const input = roleSchema.parse(request.body);
+    return reply.code(201).send(store.upsertRole(stripUndefined({
+      ...input,
+      permissions: input.permissions ?? []
+    })));
+  });
+  app.patch("/admin/roles/:roleId", async (request) => {
+    const params = request.params as { roleId: string };
+    const existing = store.listRoles().find((role) => role.id === params.roleId || role.name === params.roleId);
+    const input = roleSchema.partial().parse(request.body);
+    return store.upsertRole(stripUndefined({
+      id: existing?.id ?? params.roleId,
+      name: input.name ?? existing?.name ?? params.roleId,
+      description: input.description ?? existing?.description ?? null,
+      permissions: input.permissions ?? existing?.permissions ?? [],
+      status: input.status ?? existing?.status ?? "active"
+    }));
+  });
 
   app.get("/admin/products", async () => store.listProducts());
   app.post("/admin/products", async (request, reply) => {

@@ -69,4 +69,36 @@ describe("admin api", () => {
       name: "Comercial Autonomia"
     });
   });
+
+  it("updates profile, users and roles", async () => {
+    const app = await buildServer();
+    const headers = { authorization: `Bearer ${token}` };
+
+    const profile = await app.inject({
+      method: "PATCH",
+      url: "/admin/me",
+      headers,
+      payload: { name: "Comercial Atualizado", photoUrl: "data:image/png;base64,abc" }
+    });
+    expect(profile.statusCode).toBe(200);
+    expect(profile.json()).toMatchObject({ name: "Comercial Atualizado", photoUrl: "data:image/png;base64,abc" });
+
+    const user = await app.inject({
+      method: "POST",
+      url: "/admin/users/invitations",
+      headers,
+      payload: { name: "Novo Usuario", email: "novo@autonomia.solutions", roleNames: ["Comercial"] }
+    });
+    expect(user.statusCode).toBe(201);
+    expect(user.json()).toMatchObject({ email: "novo@autonomia.solutions", status: "invited" });
+
+    const role = await app.inject({
+      method: "POST",
+      url: "/admin/roles",
+      headers,
+      payload: { name: "Operador", permissions: ["admin.products.read"] }
+    });
+    expect(role.statusCode).toBe(201);
+    expect(role.json()).toMatchObject({ name: "Operador", permissions: ["admin.products.read"] });
+  });
 });

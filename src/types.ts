@@ -4,6 +4,7 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
+  photoUrl?: string | null;
   status: AdminStatus | "invited";
   roleNames?: string[];
   createdAt: string;

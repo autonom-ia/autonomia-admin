@@ -20,6 +20,23 @@ export interface UpsertServiceInput {
   status?: AdminService["status"] | undefined;
 }
 
+export interface UpsertUserInput {
+  id?: string | undefined;
+  email: string;
+  name: string;
+  photoUrl?: string | null | undefined;
+  status?: AdminUser["status"] | undefined;
+  roleNames?: string[] | undefined;
+}
+
+export interface UpsertRoleInput {
+  id?: string | undefined;
+  name: string;
+  description?: string | null | undefined;
+  permissions?: string[] | undefined;
+  status?: AdminRole["status"] | undefined;
+}
+
 const now = () => new Date().toISOString();
 
 const createdAt = now();
@@ -146,13 +163,14 @@ export const store = {
   listUsers() {
     return [...users.values()];
   },
-  ensureUser(input: Pick<AdminUser, "id" | "email" | "name">) {
+  ensureUser(input: Pick<AdminUser, "id" | "email" | "name"> & Partial<Pick<AdminUser, "photoUrl">>) {
     const existing = users.get(input.email);
     const timestamp = now();
     const user: AdminUser = {
       id: existing?.id ?? input.id,
       email: input.email,
       name: input.name,
+      photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
       status: existing?.status ?? "active",
       roleNames: existing?.roleNames ?? ["Administrador"],
       createdAt: existing?.createdAt ?? timestamp,
@@ -161,7 +179,37 @@ export const store = {
     users.set(user.email, user);
     return user;
   },
+  upsertUser(input: UpsertUserInput) {
+    const existing = users.get(input.email) ?? [...users.values()].find((user) => user.id === input.id);
+    const timestamp = now();
+    const user: AdminUser = {
+      id: existing?.id ?? input.id ?? `usr_${input.email.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`,
+      email: input.email,
+      name: input.name,
+      photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
+      status: input.status ?? existing?.status ?? "active",
+      roleNames: input.roleNames ?? existing?.roleNames ?? ["Administrador"],
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp
+    };
+    if (existing?.email && existing.email !== user.email) users.delete(existing.email);
+    users.set(user.email, user);
+    return user;
+  },
   listRoles() {
     return [...roles.values()];
+  },
+  upsertRole(input: UpsertRoleInput) {
+    const id = input.id ?? `role_${input.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`;
+    const existing = roles.get(id) ?? [...roles.values()].find((role) => role.id === input.id || role.name === input.name);
+    const role: AdminRole = {
+      id: existing?.id ?? id,
+      name: input.name,
+      description: input.description ?? existing?.description ?? null,
+      permissions: input.permissions ?? existing?.permissions ?? [],
+      status: input.status ?? existing?.status ?? "active"
+    };
+    roles.set(role.id.replace(/^role_/, ""), role);
+    return role;
   }
 };
