@@ -19,17 +19,33 @@ export async function requirePrincipal(request: FastifyRequest): Promise<Authent
   if (!token) throw new AuthError();
 
   const claims = await verifyOrDecode(token);
-  const email = stringClaim(claims.email) ?? stringClaim(claims.username) ?? stringClaim(claims["cognito:username"]);
-  const id = stringClaim(claims.sub) ?? email;
+  const profileClaims = decodeIdentityClaims(request);
+  const email =
+    stringClaim(profileClaims.email) ??
+    stringClaim(claims.email) ??
+    stringClaim(claims.username) ??
+    stringClaim(claims["cognito:username"]);
+  const id = stringClaim(claims.sub) ?? stringClaim(profileClaims.sub) ?? email;
   if (!email || !id) throw new AuthError("Token does not contain an email/sub.");
 
   return {
     id,
     email,
-    name: stringClaim(claims.name) ?? email.split("@")[0] ?? email,
+    name: stringClaim(profileClaims.name) ?? stringClaim(claims.name) ?? email.split("@")[0] ?? email,
     ...(stringClaim(claims.token_use) ? { tokenUse: stringClaim(claims.token_use) } : {}),
     rawClaims: claims
   };
+}
+
+function decodeIdentityClaims(request: FastifyRequest): Record<string, unknown> {
+  const header = request.headers["x-identity-token"];
+  const token = Array.isArray(header) ? header[0] : header;
+  if (!token) return {};
+  try {
+    return decodeJwt(token);
+  } catch {
+    return {};
+  }
 }
 
 async function verifyOrDecode(token: string): Promise<Record<string, unknown>> {
