@@ -5,23 +5,33 @@
   "type": "module",
   "description": "Autonom.ia Admin backend service.",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch src/local.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
+    "migrate": "tsx src/migrate.ts",
+    "migrate:dist": "node dist/migrate.js",
     "test": "vitest run",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "package": "serverless package",
+    "deploy": "serverless deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1052.0",
+    "@aws-sdk/client-sqs": "^3.1052.0",
     "@aws-sdk/s3-request-presigner": "^3.1052.0",
+    "@fastify/aws-lambda": "^6.4.0",
     "@fastify/cors": "^10.1.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "jose": "^5.9.6",
+    "pg": "8.20.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.161",
     "@types/node": "^22.10.5",
+    "@types/pg": "8.20.0",
+    "serverless": "^3.38.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

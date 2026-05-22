@@ -6,7 +6,19 @@ export interface AdminUser {
   email: string;
   photoUrl?: string | null;
   status: AdminStatus | "invited";
-  roleNames?: string[];
+  profileId?: string | null;
+  profileKey?: string | null;
+  profileName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminProfile {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  status: AdminStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -19,6 +31,37 @@ export interface AdminProduct {
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  oauthClientId: string | null;
+  allowedRedirectUris: string[];
+  allowedLogoutUris: string[];
+  allowedOrigins: string[];
+  allowGoogleLogin: boolean;
+  allowGithubLogin: boolean;
+  allowEmailPasswordLogin: boolean;
+  allowPasskeyLogin: boolean;
+  accessTokenTtlSeconds: number;
+  refreshTokenTtlSeconds: number;
+  authSyncStatus: "pending" | "synced" | "failed";
+  authSyncError: string | null;
+  authSyncedAt: string | null;
+  status: AdminStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminProductCustomization {
+  id: string;
+  productId: string;
+  domain: string;
+  displayName: string | null;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  backgroundColor: string | null;
+  textColor: string | null;
+  themeTokens: Record<string, unknown>;
+  customCss: Record<string, unknown>;
   status: AdminStatus;
   createdAt: string;
   updatedAt: string;
@@ -49,6 +92,7 @@ export interface AdminMe {
   user: AdminUser;
   organizations: Array<{ id: string; name: string }>;
   permissions: string[];
+  profiles: AdminProfile[];
   services: AdminService[];
   products: AdminProduct[];
 }

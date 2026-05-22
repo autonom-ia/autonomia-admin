@@ -1,0 +1,85 @@
+service: autonomia-admin
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, "prod"}
+  region: ${opt:region, "us-east-1"}
+  memorySize: 512
+  timeout: 28
+  logRetentionInDays: 30
+  environment:
+    NODE_ENV: production
+    CORS_ORIGINS: ${env:CORS_ORIGINS, "https://neuroai.autonomia.site,http://localhost:3002"}
+    DATABASE_URL: ${ssm:/autonomia/${self:provider.stage}/admin/database-url}
+    DATABASE_POOL_MAX: ${env:DATABASE_POOL_MAX, "5"}
+    DATABASE_SSL_MODE: ${env:DATABASE_SSL_MODE, "require"}
+    DATABASE_SSL_REJECT_UNAUTHORIZED: ${env:DATABASE_SSL_REJECT_UNAUTHORIZED, "false"}
+    AUTH_SYNC_QUEUE_URL: ${env:AUTH_SYNC_QUEUE_URL, "https://sqs.${self:provider.region}.amazonaws.com/140023375763/autonomia-auth-sync"}
+    JWT_ISSUER: ${env:JWT_ISSUER, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E"}
+    JWT_AUDIENCE: ${env:JWT_AUDIENCE, "6amud6bb0ecrmhp5sm24slk4g6"}
+    JWKS_URL: ${env:JWKS_URL, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E/.well-known/jwks.json"}
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+    ADMIN_ASSETS_BUCKET: ${env:ADMIN_ASSETS_BUCKET, "autonomia-admin-assets-140023375763-prod"}
+    ADMIN_ASSETS_PUBLIC_BASE_URL: ${env:ADMIN_ASSETS_PUBLIC_BASE_URL, "https://api.neuroai.autonomia.site/assets"}
+    ADMIN_UPLOAD_URL_EXPIRES_SECONDS: ${env:ADMIN_UPLOAD_URL_EXPIRES_SECONDS, "300"}
+  vpc:
+    securityGroupIds:
+      - ${env:LAMBDA_SECURITY_GROUP_ID, "sg-0127bcdb3f0f77a24"}
+    subnetIds:
+      - ${env:LAMBDA_SUBNET_ID_A, "subnet-000fbcffe0f8d9a11"}
+      - ${env:LAMBDA_SUBNET_ID_B, "subnet-07184b6cfa97367e2"}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource: arn:aws:sqs:${self:provider.region}:140023375763:autonomia-auth-sync
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+          Resource: arn:aws:s3:::autonomia-admin-assets-140023375763-prod/*
+        - Effect: Allow
+          Action:
+            - ec2:CreateNetworkInterface
+            - ec2:DescribeNetworkInterfaces
+            - ec2:DeleteNetworkInterface
+          Resource: "*"
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+      - httpApi:
+          path: /
+          method: ANY
+
+  migrate:
+    handler: dist/migrate-handler.handler
+    timeout: 120
+
+package:
+  patterns:
+    - dist/**
+    - database/migrations/**
+    - package.json
+    - node_modules/**
+    - "!src/**"
+    - "!tests/**"
+    - "!docs/**"
+    - "!coverage/**"
+    - "!*.log"
+    - "!.env*"
+
+resources:
+  Outputs:
+    AdminApiUrl:
+      Value:
+        Fn::Sub: "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"

@@ -32,7 +32,9 @@ const idTokenWithProfile = [
   ""
 ].join(".");
 
-describe("admin api", () => {
+const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
+
+describeWithDatabase("admin api", () => {
   it("includes the authenticated principal in /admin/users", async () => {
     const app = await buildServer();
     const response = await app.inject({
@@ -70,7 +72,7 @@ describe("admin api", () => {
     });
   });
 
-  it("updates profile, users and roles", async () => {
+  it("updates profile and users", async () => {
     const app = await buildServer();
     const headers = { authorization: `Bearer ${token}` };
 
@@ -87,18 +89,9 @@ describe("admin api", () => {
       method: "POST",
       url: "/admin/users/invitations",
       headers,
-      payload: { name: "Novo Usuario", email: "novo@autonomia.solutions", roleNames: ["Comercial"] }
+      payload: { name: "Novo Usuario", email: "novo@autonomia.solutions", profileKey: "autonomia_master" }
     });
     expect(user.statusCode).toBe(201);
     expect(user.json()).toMatchObject({ email: "novo@autonomia.solutions", status: "invited" });
-
-    const role = await app.inject({
-      method: "POST",
-      url: "/admin/roles",
-      headers,
-      payload: { name: "Operador", permissions: ["admin.products.read"] }
-    });
-    expect(role.statusCode).toBe(201);
-    expect(role.json()).toMatchObject({ name: "Operador", permissions: ["admin.products.read"] });
   });
 });

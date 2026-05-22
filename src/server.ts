@@ -37,8 +37,3 @@ export async function buildServer() {
 
   return app;
 }
-
-if (process.env.NODE_ENV !== "test") {
-  const app = await buildServer();
-  await app.listen({ host: config.host, port: config.port });
-}

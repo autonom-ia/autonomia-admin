@@ -1,0 +1,65 @@
+name: Deploy Admin API prod
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: autonomia-admin-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: Validate deployment variables
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+        run: |
+          set -euo pipefail
+          : "${AWS_REGION:?Missing GitHub environment variable AWS_REGION}"
+          : "${AWS_ROLE_TO_ASSUME:?Missing GitHub environment variable AWS_ROLE_TO_ASSUME}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy Lambda API
+        run: pnpm deploy --stage prod --region "${{ vars.AWS_REGION }}"
+
+      - name: Run database migrations
+        run: |
+          set -euo pipefail
+          aws lambda invoke \
+            --function-name autonomia-admin-prod-migrate \
+            --payload '{}' \
+            /tmp/autonomia-admin-migrate-response.json
+          cat /tmp/autonomia-admin-migrate-response.json

@@ -6,12 +6,22 @@ Este serviço expõe os endpoints consumidos pelo `@autonom-ia/admin-sdk`:
 
 ```text
 GET  /admin/me
+PATCH /admin/me
 POST /admin/uploads/presigned-url
+GET  /admin/profiles
+GET  /admin/permissions
 GET  /admin/users
-GET  /admin/roles
+GET  /admin/users/:userId
+POST /admin/users/invitations
+PATCH /admin/users/:userId
+POST /admin/users/:userId/activate
+POST /admin/users/:userId/deactivate
 GET  /admin/products
 POST /admin/products
 PATCH /admin/products/:productKey
+GET  /admin/products/:productId/customizations
+POST /admin/products/:productId/customizations
+PATCH /admin/products/:productId/customizations/:customizationId
 GET  /admin/services
 POST /admin/services
 PATCH /admin/services/:serviceKey
@@ -22,6 +32,7 @@ PATCH /admin/services/:serviceKey
 ```bash
 pnpm install
 cp .env.example .env
+pnpm migrate
 pnpm dev
 ```
 
@@ -34,27 +45,67 @@ http://localhost:3003
 Para testar com o `neuroai-web`, use:
 
 ```text
-VITE_API_URL=http://localhost:3003
+NEXT_PUBLIC_ADMIN_API_URL=http://localhost:3003
 ```
 
-## Autenticacao
+## Autenticação
 
 Todas as rotas `/admin/*` exigem `Authorization: Bearer <jwt>`.
 
 Quando `JWKS_URL` estiver configurado, o token e validado via JWKS/Cognito.
 Para desenvolvimento local sem JWKS, remova `JWKS_URL` do `.env`; nesse modo o token e apenas decodificado para permitir testes de frontend.
 
+## RDS compartilhado
+
+O Admin API usa o mesmo RDS do Identity/Auth e grava no schema `admin`.
+Nao existe Postgres local nem fallback em arquivo para as rotas administrativas.
+
+Variáveis obrigatórias:
+
+```text
+DATABASE_URL=postgres://user:password@auth-rds-host:5432/autonomia_identity
+DATABASE_POOL_MAX=5
+DATABASE_SSL_MODE=require
+DATABASE_SSL_REJECT_UNAUTHORIZED=false
+AUTH_SYNC_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/140023375763/autonomia-auth-sync
+```
+
+`AUTH_SYNC_QUEUE_URL` aponta para a fila criada pelo Identity/Auth e é obrigatório para criar ou alterar produtos.
+Ao salvar um produto, a API publica `admin.product.upserted`; o consumer do Auth faz upsert em `auth.oauth_clients`.
+Ao salvar uma customização de produto, a API publica `admin.product_customization.upserted`; o consumer do Auth faz upsert em `auth.oauth_client_customizations`.
+
 ## Escopo inicial
 
-- Usuarios
+- Usuários
+- Profiles
 - Produtos
 - Services
-- Perfis de acesso
 - Meu perfil
 
 ## Banco de dados
 
 As migrations SQL ficam em `database/migrations`.
+
+Migrations atuais:
+
+```text
+001_create_admin_schema.sql
+002_add_profiles_and_customizations.sql
+003_add_product_oauth_settings.sql
+```
+
+A migration `002` cria:
+
+```text
+admin.profiles
+admin.product_customizations
+```
+
+E faz seed do profile inicial:
+
+```text
+autonomia_master
+```
 
 Todas as tabelas do schema `admin` devem seguir o padrao:
 
