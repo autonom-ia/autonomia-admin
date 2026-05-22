@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { AdminProduct, AdminRole, AdminService, AdminUser } from "./types.js";
 
 export interface UpsertProductInput {
@@ -117,6 +119,17 @@ const roles = new Map<string, AdminRole>([
   ]
 ]);
 
+interface StoreSnapshot {
+  products?: AdminProduct[];
+  services?: AdminService[];
+  users?: AdminUser[];
+  roles?: AdminRole[];
+}
+
+const dataFile = resolve(process.cwd(), ".data/admin-store.json");
+
+loadSnapshot();
+
 export const store = {
   listProducts() {
     return [...products.values()];
@@ -137,6 +150,7 @@ export const store = {
       updatedAt: timestamp
     };
     products.set(product.key, product);
+    saveSnapshot();
     return product;
   },
   listServices() {
@@ -158,6 +172,7 @@ export const store = {
       updatedAt: timestamp
     };
     services.set(service.key, service);
+    saveSnapshot();
     return service;
   },
   listUsers() {
@@ -177,6 +192,7 @@ export const store = {
       updatedAt: timestamp
     };
     users.set(user.email, user);
+    saveSnapshot();
     return user;
   },
   upsertUser(input: UpsertUserInput) {
@@ -194,6 +210,7 @@ export const store = {
     };
     if (existing?.email && existing.email !== user.email) users.delete(existing.email);
     users.set(user.email, user);
+    saveSnapshot();
     return user;
   },
   listRoles() {
@@ -210,6 +227,30 @@ export const store = {
       status: input.status ?? existing?.status ?? "active"
     };
     roles.set(role.id.replace(/^role_/, ""), role);
+    saveSnapshot();
     return role;
   }
 };
+
+function loadSnapshot() {
+  try {
+    const snapshot = JSON.parse(readFileSync(dataFile, "utf8")) as StoreSnapshot;
+    snapshot.products?.forEach((product) => products.set(product.key, product));
+    snapshot.services?.forEach((service) => services.set(service.key, service));
+    snapshot.users?.forEach((user) => users.set(user.email, user));
+    snapshot.roles?.forEach((role) => roles.set(role.id.replace(/^role_/, ""), role));
+  } catch {
+    // Local development starts with seed data when no persisted file exists.
+  }
+}
+
+function saveSnapshot() {
+  const snapshot: StoreSnapshot = {
+    products: [...products.values()],
+    services: [...services.values()],
+    users: [...users.values()],
+    roles: [...roles.values()]
+  };
+  mkdirSync(dirname(dataFile), { recursive: true });
+  writeFileSync(dataFile, JSON.stringify(snapshot, null, 2));
+}
