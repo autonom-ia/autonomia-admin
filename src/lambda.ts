@@ -14,6 +14,7 @@ async function getProxy() {
 }
 
 export async function handler(event: APIGatewayProxyEventV2, context: Context, callback: Callback) {
+  context.callbackWaitsForEmptyEventLoop = false;
   const proxy = await getProxy();
   return proxy(event, context, callback);
 }
