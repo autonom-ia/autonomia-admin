@@ -19,5 +19,8 @@ export async function runMigrations() {
 }
 
 if (process.argv[1]?.endsWith("migrate.js") || process.argv[1]?.endsWith("migrate.ts")) {
-  await runMigrations();
+  runMigrations().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
 }

@@ -12,7 +12,7 @@ custom:
     sourcemap: false
     platform: node
     target: node20
-    format: esm
+    format: cjs
     concurrency: 4
     packager: pnpm
 
@@ -37,7 +37,7 @@ provider:
     JWKS_URL: ${env:JWKS_URL, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E/.well-known/jwks.json"}
     AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
     ADMIN_ASSETS_BUCKET: ${env:ADMIN_ASSETS_BUCKET, "autonomia-admin-assets-140023375763-prod"}
-    ADMIN_ASSETS_PUBLIC_BASE_URL: ${env:ADMIN_ASSETS_PUBLIC_BASE_URL, "https://api.neuroai.autonomia.site/assets"}
+    ADMIN_ASSETS_PUBLIC_BASE_URL: ${env:ADMIN_ASSETS_PUBLIC_BASE_URL, "https://admin.api-autonomia.com/assets"}
     ADMIN_UPLOAD_URL_EXPIRES_SECONDS: ${env:ADMIN_UPLOAD_URL_EXPIRES_SECONDS, "300"}
   vpc:
     securityGroupIds:

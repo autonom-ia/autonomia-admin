@@ -1,8 +1,19 @@
 import awsLambdaFastify from "@fastify/aws-lambda";
+import type { APIGatewayProxyEventV2, Callback, Context } from "aws-lambda";
 import { buildServer } from "./server.js";
 
-const app = await buildServer();
+let proxyPromise: Promise<ReturnType<typeof awsLambdaFastify>> | undefined;
 
-export const handler = awsLambdaFastify(app, {
-  decorateRequest: false
-});
+async function getProxy() {
+  proxyPromise ??= buildServer().then((app) =>
+    awsLambdaFastify(app, {
+      decorateRequest: false
+    })
+  );
+  return proxyPromise;
+}
+
+export async function handler(event: APIGatewayProxyEventV2, context: Context, callback: Callback) {
+  const proxy = await getProxy();
+  return proxy(event, context, callback);
+}
