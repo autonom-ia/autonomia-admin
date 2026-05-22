@@ -51,4 +51,16 @@ Para desenvolvimento local sem JWKS, remova `JWKS_URL` do `.env`; nesse modo o t
 - Perfis de acesso
 - Meu perfil
 
+## Banco de dados
+
+As migrations SQL ficam em `database/migrations`.
+
+Todas as tabelas do schema `admin` devem seguir o padrao:
+
+```text
+id UUID PRIMARY KEY DEFAULT gen_random_uuid()
+```
+
+Chaves naturais como `key` e associacoes N:N devem ser mantidas como `UNIQUE`, nunca como chave primaria composta.
+
 O Identity/Auth permanece fora deste repo.

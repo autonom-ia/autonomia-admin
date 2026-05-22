@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { AdminProduct, AdminRole, AdminService, AdminUser } from "./types.js";
 
 export interface UpsertProductInput {
@@ -40,6 +41,8 @@ export interface UpsertRoleInput {
 }
 
 const now = () => new Date().toISOString();
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuidOrNew = (id?: string | null) => (id && uuidPattern.test(id) ? id : randomUUID());
 
 const createdAt = now();
 
@@ -47,7 +50,7 @@ const products = new Map<string, AdminProduct>([
   [
     "neuroai-web",
     {
-      id: "prod_neuroai_web",
+      id: randomUUID(),
       key: "neuroai-web",
       name: "NeuroAI",
       description: "Studio operacional do NeuroAI",
@@ -62,7 +65,7 @@ const products = new Map<string, AdminProduct>([
   [
     "autonomia-studio",
     {
-      id: "prod_autonomia_studio",
+      id: randomUUID(),
       key: "autonomia-studio",
       name: "Autonomia Studio",
       description: "Console administrativo Autonom.ia",
@@ -80,7 +83,7 @@ const services = new Map<string, AdminService>([
   [
     "admin",
     {
-      id: "svc_admin",
+      id: randomUUID(),
       key: "admin",
       name: "Admin",
       description: "Usuarios, produtos e services",
@@ -100,7 +103,7 @@ const roles = new Map<string, AdminRole>([
   [
     "admin",
     {
-      id: "role_admin",
+      id: randomUUID(),
       name: "Administrador",
       description: "Acesso administrativo completo",
       permissions: ["admin.users.read", "admin.roles.read", "admin.products.read", "admin.services.read"],
@@ -110,7 +113,7 @@ const roles = new Map<string, AdminRole>([
   [
     "commercial",
     {
-      id: "role_commercial",
+      id: randomUUID(),
       name: "Comercial",
       description: "Acesso comercial inicial",
       permissions: ["admin.users.read", "admin.products.read", "admin.services.read"],
@@ -138,7 +141,7 @@ export const store = {
     const existing = products.get(input.key);
     const timestamp = now();
     const product: AdminProduct = {
-      id: existing?.id ?? `prod_${input.key.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`,
+      id: uuidOrNew(existing?.id),
       key: input.key,
       name: input.name,
       description: input.description ?? existing?.description ?? null,
@@ -160,7 +163,7 @@ export const store = {
     const existing = services.get(input.key);
     const timestamp = now();
     const service: AdminService = {
-      id: existing?.id ?? `svc_${input.key.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`,
+      id: uuidOrNew(existing?.id),
       key: input.key,
       name: input.name,
       description: input.description ?? existing?.description ?? null,
@@ -182,7 +185,7 @@ export const store = {
     const existing = users.get(input.email);
     const timestamp = now();
     const user: AdminUser = {
-      id: existing?.id ?? input.id,
+      id: uuidOrNew(existing?.id ?? input.id),
       email: input.email,
       name: input.name,
       photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
@@ -199,7 +202,7 @@ export const store = {
     const existing = users.get(input.email) ?? [...users.values()].find((user) => user.id === input.id);
     const timestamp = now();
     const user: AdminUser = {
-      id: existing?.id ?? input.id ?? `usr_${input.email.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`,
+      id: uuidOrNew(existing?.id ?? input.id),
       email: input.email,
       name: input.name,
       photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
@@ -217,10 +220,10 @@ export const store = {
     return [...roles.values()];
   },
   upsertRole(input: UpsertRoleInput) {
-    const id = input.id ?? `role_${input.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`;
+    const id = uuidOrNew(input.id);
     const existing = roles.get(id) ?? [...roles.values()].find((role) => role.id === input.id || role.name === input.name);
     const role: AdminRole = {
-      id: existing?.id ?? id,
+      id: uuidOrNew(existing?.id ?? id),
       name: input.name,
       description: input.description ?? existing?.description ?? null,
       permissions: input.permissions ?? existing?.permissions ?? [],
@@ -235,10 +238,32 @@ export const store = {
 function loadSnapshot() {
   try {
     const snapshot = JSON.parse(readFileSync(dataFile, "utf8")) as StoreSnapshot;
-    snapshot.products?.forEach((product) => products.set(product.key, product));
-    snapshot.services?.forEach((service) => services.set(service.key, service));
-    snapshot.users?.forEach((user) => users.set(user.email, user));
-    snapshot.roles?.forEach((role) => roles.set(role.id.replace(/^role_/, ""), role));
+    let normalized = false;
+    if (snapshot.products) products.clear();
+    if (snapshot.services) services.clear();
+    if (snapshot.users) users.clear();
+    if (snapshot.roles) roles.clear();
+    snapshot.products?.forEach((product) => {
+      const item = { ...product, id: uuidOrNew(product.id) };
+      normalized ||= item.id !== product.id;
+      products.set(item.key, item);
+    });
+    snapshot.services?.forEach((service) => {
+      const item = { ...service, id: uuidOrNew(service.id) };
+      normalized ||= item.id !== service.id;
+      services.set(item.key, item);
+    });
+    snapshot.users?.forEach((user) => {
+      const item = { ...user, id: uuidOrNew(user.id) };
+      normalized ||= item.id !== user.id;
+      users.set(item.email, item);
+    });
+    snapshot.roles?.forEach((role) => {
+      const item = { ...role, id: uuidOrNew(role.id) };
+      normalized ||= item.id !== role.id;
+      roles.set(item.id, item);
+    });
+    if (normalized) saveSnapshot();
   } catch {
     // Local development starts with seed data when no persisted file exists.
   }
