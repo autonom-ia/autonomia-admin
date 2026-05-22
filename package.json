@@ -32,6 +32,7 @@
     "@types/node": "^22.10.5",
     "@types/pg": "8.20.0",
     "serverless": "^3.38.0",
+    "serverless-esbuild": "^1.57.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

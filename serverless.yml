@@ -2,6 +2,20 @@ service: autonomia-admin
 
 frameworkVersion: "3"
 
+plugins:
+  - serverless-esbuild
+
+custom:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: false
+    platform: node
+    target: node20
+    format: esm
+    concurrency: 4
+    packager: pnpm
+
 provider:
   name: aws
   runtime: nodejs20.x
@@ -52,7 +66,7 @@ provider:
 
 functions:
   api:
-    handler: dist/lambda.handler
+    handler: src/lambda.handler
     events:
       - httpApi:
           path: /{proxy+}
@@ -62,15 +76,13 @@ functions:
           method: ANY
 
   migrate:
-    handler: dist/migrate-handler.handler
+    handler: src/migrate-handler.handler
     timeout: 120
 
 package:
   patterns:
-    - dist/**
     - database/migrations/**
     - package.json
-    - node_modules/**
     - "!src/**"
     - "!tests/**"
     - "!docs/**"
