@@ -6,6 +6,7 @@ Este serviço expõe os endpoints consumidos pelo `@autonom-ia/admin-sdk`:
 
 ```text
 GET  /admin/me
+POST /admin/uploads/presigned-url
 GET  /admin/users
 GET  /admin/roles
 GET  /admin/products
@@ -64,3 +65,21 @@ id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 Chaves naturais como `key` e associacoes N:N devem ser mantidas como `UNIQUE`, nunca como chave primaria composta.
 
 O Identity/Auth permanece fora deste repo.
+
+## Uploads de imagens
+
+Logos de produtos e fotos de perfil nao devem ser enviados como base64 para a Admin API.
+O fluxo correto e:
+
+1. O frontend chama `POST /admin/uploads/presigned-url` com `fileName`, `contentType` e `folder`.
+2. A API retorna uma URL pre-assinada de `PUT` para o S3 e a `publicUrl`.
+3. O SDK envia o arquivo diretamente para o S3.
+4. A API salva apenas a URL publica em `logoUrl` ou `photoUrl`.
+
+Variaveis obrigatorias:
+
+```text
+AWS_REGION=us-east-1
+ADMIN_ASSETS_BUCKET=<bucket-s3>
+ADMIN_ASSETS_PUBLIC_BASE_URL=<url-publica-ou-cloudfront>
+```

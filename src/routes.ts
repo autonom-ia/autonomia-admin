@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requirePrincipal } from "./auth.js";
 import { store } from "./store.js";
+import { createUploadUrl } from "./uploads.js";
 
 const productSchema = z.object({
   key: z.string().min(2),
@@ -43,6 +44,12 @@ const roleSchema = z.object({
   status: z.enum(["active", "inactive"]).optional()
 });
 
+const uploadUrlSchema = z.object({
+  fileName: z.string().min(1),
+  contentType: z.string().min(1),
+  folder: z.string().optional()
+});
+
 export async function registerRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true, service: "autonomia-admin" }));
 
@@ -74,6 +81,12 @@ export async function registerRoutes(app: FastifyInstance) {
       products: store.listProducts()
     };
   });
+
+  app.post("/admin/uploads/presigned-url", async (request, reply) => {
+    const input = uploadUrlSchema.parse(request.body);
+    return reply.code(201).send(await createUploadUrl(input));
+  });
+
   app.patch("/admin/me", async (request) => {
     const principal = request.principal;
     const existing = store.ensureUser({ id: principal.id, email: principal.email, name: principal.name });
