@@ -53,7 +53,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Deploy Lambda API
-        run: pnpm deploy --stage prod --region "${{ vars.AWS_REGION }}"
+        run: pnpm run deploy -- --stage prod --region "${{ vars.AWS_REGION }}"
 
       - name: Run database migrations
         run: |
