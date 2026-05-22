@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import type { Readable } from "node:stream";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import { extname } from "node:path";
@@ -34,7 +35,7 @@ export async function createUploadUrl(input: CreateUploadUrlInput) {
     ContentType: input.contentType
   });
   const uploadUrl = await getSignedUrl(s3, command, { expiresIn: config.uploadUrlExpiresSeconds });
-  const publicUrl = `${publicBaseUrl()}/${key}`;
+  const publicUrl = `${publicBaseUrl()}/${encodeAssetKey(key)}`;
 
   return {
     uploadUrl,
@@ -48,9 +49,44 @@ export async function createUploadUrl(input: CreateUploadUrlInput) {
   };
 }
 
+export async function getAssetObject(key: string) {
+  if (!config.assetsBucket) {
+    const error = new Error("ADMIN_ASSETS_BUCKET is not configured.") as Error & { statusCode?: number };
+    error.statusCode = 503;
+    throw error;
+  }
+
+  const normalizedKey = normalizeAssetKey(key);
+  const result = await s3.send(new GetObjectCommand({
+    Bucket: config.assetsBucket,
+    Key: normalizedKey
+  }));
+
+  return {
+    body: result.Body as Readable,
+    contentType: result.ContentType ?? "application/octet-stream",
+    contentLength: result.ContentLength,
+    cacheControl: result.CacheControl ?? "public, max-age=31536000, immutable"
+  };
+}
+
 function publicBaseUrl() {
   if (config.assetsPublicBaseUrl) return config.assetsPublicBaseUrl.replace(/\/+$/g, "");
-  return `https://${config.assetsBucket}.s3.${config.awsRegion}.amazonaws.com`;
+  return "/assets";
+}
+
+function encodeAssetKey(key: string) {
+  return key.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+
+function normalizeAssetKey(key: string) {
+  const decoded = decodeURIComponent(key).replace(/^\/+/, "");
+  if (!decoded || decoded.includes("..")) {
+    const error = new Error("Invalid asset key.") as Error & { statusCode?: number };
+    error.statusCode = 400;
+    throw error;
+  }
+  return decoded;
 }
 
 function safeExtension(fileName: string, contentType: string) {

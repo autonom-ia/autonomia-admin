@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requirePrincipal } from "./auth.js";
 import { store } from "./store.js";
-import { createUploadUrl } from "./uploads.js";
+import { createUploadUrl, getAssetObject } from "./uploads.js";
 
 const productSchema = z.object({
   key: z.string().min(2),
@@ -53,8 +53,17 @@ const uploadUrlSchema = z.object({
 export async function registerRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true, service: "autonomia-admin" }));
 
+  app.get("/assets/*", async (request, reply) => {
+    const params = request.params as { "*": string };
+    const asset = await getAssetObject(params["*"]);
+    reply.header("content-type", asset.contentType);
+    reply.header("cache-control", asset.cacheControl);
+    if (asset.contentLength !== undefined) reply.header("content-length", asset.contentLength);
+    return reply.send(asset.body);
+  });
+
   app.addHook("preHandler", async (request, reply) => {
-    if (request.url === "/health") return;
+    if (request.url === "/health" || request.url.startsWith("/assets/")) return;
     try {
       const principal = await requirePrincipal(request);
       request.principal = principal;
