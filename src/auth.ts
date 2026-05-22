@@ -53,13 +53,27 @@ async function verifyOrDecode(token: string): Promise<Record<string, unknown>> {
 
   jwks ??= createRemoteJWKSet(new URL(config.jwksUrl));
   const options = {
-    ...(config.jwtIssuer ? { issuer: config.jwtIssuer } : {}),
-    ...(config.jwtAudience ? { audience: config.jwtAudience } : {})
+    ...(config.jwtIssuer ? { issuer: config.jwtIssuer } : {})
   };
   const verified = await jwtVerify(token, jwks, options);
+  assertExpectedAudienceOrClient(verified.payload);
   return verified.payload;
 }
 
 function stringClaim(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function assertExpectedAudienceOrClient(claims: Record<string, unknown>) {
+  if (!config.jwtAudience) return;
+
+  const audience = claims.aud;
+  const clientId = stringClaim(claims.client_id);
+  const audienceMatches = Array.isArray(audience)
+    ? audience.includes(config.jwtAudience)
+    : audience === config.jwtAudience;
+
+  if (!audienceMatches && clientId !== config.jwtAudience) {
+    throw new AuthError("Token audience/client_id does not match this API.");
+  }
 }
