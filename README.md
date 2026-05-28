@@ -68,11 +68,30 @@ DATABASE_POOL_MAX=5
 DATABASE_SSL_MODE=require
 DATABASE_SSL_REJECT_UNAUTHORIZED=false
 AUTH_SYNC_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/140023375763/autonomia-auth-sync
+FINANCIAL_SYNC_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/140023375763/autonomia-financial-sync
 ```
+
+Para testar localmente com o RDS privado, abra um tunel SSM em uma sessao separada:
+
+```bash
+./scripts/start_rds_tunnel.sh 5433
+```
+
+O script tenta localizar automaticamente uma instancia SSM online na mesma VPC do RDS.
+Se nao houver instancia online, informe explicitamente:
+
+```bash
+BASTION_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx ./scripts/start_rds_tunnel.sh 5433
+```
+
+Com o tunel aberto, o `.env` local deve apontar o `DATABASE_URL` para `localhost:5433`.
 
 `AUTH_SYNC_QUEUE_URL` aponta para a fila criada pelo Identity/Auth e é obrigatório para criar ou alterar produtos.
 Ao salvar um produto, a API publica `admin.product.upserted`; o consumer do Auth faz upsert em `auth.oauth_clients`.
 Ao salvar uma customização de produto, a API publica `admin.product_customization.upserted`; o consumer do Auth faz upsert em `auth.oauth_client_customizations`.
+
+`FINANCIAL_SYNC_QUEUE_URL` aponta para a fila do Financial.
+Ao criar ou alterar produto/serviço no Admin, a API publica um evento para que o Financial mantenha `financial.catalog_items` sincronizado para a empresa `autonom-ia`.
 
 ## Escopo inicial
 

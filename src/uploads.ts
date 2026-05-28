@@ -1,5 +1,4 @@
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import type { Readable } from "node:stream";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import { extname } from "node:path";
@@ -63,7 +62,7 @@ export async function getAssetObject(key: string) {
   }));
 
   return {
-    body: result.Body as Readable,
+    body: result.Body ? Buffer.from(await result.Body.transformToByteArray()) : Buffer.alloc(0),
     contentType: result.ContentType ?? "application/octet-stream",
     contentLength: result.ContentLength,
     cacheControl: result.CacheControl ?? "public, max-age=31536000, immutable"

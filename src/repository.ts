@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { AdminProduct, AdminProductCustomization, AdminProfile, AdminRole, AdminService, AdminUser } from "./types.js";
+import type { AdminProduct, AdminProductCustomization, AdminProfile, AdminRole, AdminService, AdminUser, ProductService } from "./types.js";
 
 export interface UpsertProductInput {
   key: string;
@@ -247,6 +247,21 @@ export class AdminRepository {
     return mapProduct(result.rows[0] as DbProductRow);
   }
 
+  async markProductAuthSyncFailed(productId: string, error: string) {
+    const result = await this.db.query(
+      `UPDATE admin.products
+       SET auth_sync_status = 'failed',
+           auth_sync_error = $2,
+           auth_synced_at = NULL,
+           updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [productId, error]
+    );
+    if (!result.rows[0]) throw new Error("Product not found.");
+    return mapProduct(result.rows[0] as DbProductRow);
+  }
+
   async listProductCustomizations(productId: string): Promise<AdminProductCustomization[]> {
     const result = await this.db.query(
       `SELECT *
@@ -337,6 +352,49 @@ export class AdminRepository {
       ]
     );
     return mapService(result.rows[0] as DbServiceRow);
+  }
+
+  async listProductServices(productId: string): Promise<ProductService[]> {
+    const result = await this.db.query(
+      `SELECT id, product_id, service_id, status, display_order, created_at, updated_at
+       FROM admin.product_services
+       WHERE product_id = $1
+       ORDER BY display_order ASC, created_at ASC`,
+      [productId]
+    );
+    return result.rows.map(mapProductService);
+  }
+
+  async replaceProductServices(productId: string, services: Array<string | { serviceId: string; displayOrder?: number | undefined }>): Promise<ProductService[]> {
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM admin.product_services WHERE product_id = $1", [productId]);
+      for (const [index, item] of services.entries()) {
+        const serviceId = typeof item === "string" ? item : item.serviceId;
+        const displayOrder = typeof item === "string" ? index : item.displayOrder ?? index;
+        await client.query(
+          `INSERT INTO admin.product_services (product_id, service_id, status, display_order)
+           VALUES ($1, $2, 'enabled', $3)
+           ON CONFLICT (product_id, service_id) DO UPDATE SET status = 'enabled', display_order = EXCLUDED.display_order, updated_at = now()`,
+          [productId, serviceId, displayOrder]
+        );
+      }
+      const result = await client.query(
+        `SELECT id, product_id, service_id, status, display_order, created_at, updated_at
+         FROM admin.product_services
+         WHERE product_id = $1
+         ORDER BY display_order ASC, created_at ASC`,
+        [productId]
+      );
+      await client.query("COMMIT");
+      return result.rows.map(mapProductService);
+    } catch (cause) {
+      await client.query("ROLLBACK");
+      throw cause;
+    } finally {
+      client.release();
+    }
   }
 
   async listRoles(): Promise<AdminRole[]> {
@@ -461,6 +519,18 @@ function mapService(row: DbServiceRow): AdminService {
   };
 }
 
+function mapProductService(row: DbProductServiceRow): ProductService {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    serviceId: row.service_id,
+    status: row.status,
+    displayOrder: Number(row.display_order ?? 0),
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at)
+  };
+}
+
 function toIso(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -545,6 +615,16 @@ interface DbServiceRow {
   package_name: string | null;
   entrypoint_url: string | null;
   status: AdminService["status"];
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface DbProductServiceRow {
+  id: string;
+  product_id: string;
+  service_id: string;
+  status: ProductService["status"];
+  display_order: number | string;
   created_at: Date | string;
   updated_at: Date | string;
 }

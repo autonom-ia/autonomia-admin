@@ -13,6 +13,7 @@ export const config = {
   databaseSslMode: process.env.DATABASE_SSL_MODE ?? process.env.PGSSLMODE,
   databaseSslRejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
   authSyncQueueUrl: process.env.AUTH_SYNC_QUEUE_URL,
+  financialSyncQueueUrl: process.env.FINANCIAL_SYNC_QUEUE_URL,
   corsOrigins: list(process.env.CORS_ORIGINS, ["http://localhost:3002"]),
   jwtIssuer: process.env.JWT_ISSUER,
   jwtAudience: process.env.JWT_AUDIENCE,

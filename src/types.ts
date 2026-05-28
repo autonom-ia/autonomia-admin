@@ -80,6 +80,16 @@ export interface AdminService {
   updatedAt: string;
 }
 
+export interface ProductService {
+  id: string;
+  productId: string;
+  serviceId: string;
+  status: "enabled" | "disabled";
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AdminRole {
   id: string;
   name: string;

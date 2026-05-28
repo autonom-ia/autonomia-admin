@@ -3,6 +3,7 @@ import { z } from "zod";
 import { publishProductCustomizationUpserted, publishProductUpserted } from "./auth-sync.js";
 import { requirePrincipal } from "./auth.js";
 import { getPool } from "./db.js";
+import { publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted } from "./financial-sync.js";
 import { AdminRepository } from "./repository.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
@@ -70,6 +71,14 @@ const uploadUrlSchema = z.object({
   folder: z.string().optional()
 });
 
+const productServicesSchema = z.object({
+  serviceIds: z.array(z.string().uuid()).optional(),
+  services: z.array(z.object({
+    serviceId: z.string().uuid(),
+    displayOrder: z.number().int().min(0).optional()
+  })).optional()
+});
+
 export async function registerRoutes(app: FastifyInstance) {
   const admin = new AdminRepository(getPool());
 
@@ -106,10 +115,7 @@ export async function registerRoutes(app: FastifyInstance) {
     return {
       user,
       organizations: [{ id: "autonomia", name: "Autonom.ia" }],
-      permissions: adminPermissions,
-      profiles: await admin.listProfiles(),
-      services: await admin.listServices(),
-      products: await admin.listProducts()
+      permissions: adminPermissions
     };
   });
 
@@ -185,20 +191,42 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get("/admin/products", async () => admin.listProducts());
   app.post("/admin/products", async (request, reply) => {
     const input = productSchema.parse(request.body);
-    const product = await admin.upsertProduct(stripUndefined(input));
-    await publishProductUpserted(product);
+    let product = await admin.upsertProduct(stripUndefined(input));
+    try {
+      await publishProductUpserted(product);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to publish auth sync event.";
+      request.log.warn({ err: error, productId: product.id, productKey: product.key }, "product auth sync publish failed");
+      product = await admin.markProductAuthSyncFailed(product.id, message);
+    }
+    try {
+      await publishProductFinancialCatalogUpserted(product);
+    } catch (error) {
+      request.log.warn({ err: error, productId: product.id, productKey: product.key }, "product financial sync publish failed");
+    }
     return reply.code(201).send(product);
   });
   app.patch("/admin/products/:productKey", async (request) => {
     const params = request.params as { productKey: string };
     const existing = (await admin.listProducts()).find((product) => product.key === params.productKey);
     const input = productSchema.partial().parse(request.body);
-    const product = await admin.upsertProduct(stripUndefined({
+    let product = await admin.upsertProduct(stripUndefined({
       ...input,
       key: params.productKey,
       name: input.name ?? existing?.name ?? params.productKey
     }));
-    await publishProductUpserted(product);
+    try {
+      await publishProductUpserted(product);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to publish auth sync event.";
+      request.log.warn({ err: error, productId: product.id, productKey: product.key }, "product auth sync publish failed");
+      product = await admin.markProductAuthSyncFailed(product.id, message);
+    }
+    try {
+      await publishProductFinancialCatalogUpserted(product);
+    } catch (error) {
+      request.log.warn({ err: error, productId: product.id, productKey: product.key }, "product financial sync publish failed");
+    }
     return product;
   });
 
@@ -238,20 +266,43 @@ export async function registerRoutes(app: FastifyInstance) {
     return customization;
   });
 
+  app.get("/admin/products/:productId/services", async (request) => {
+    const params = request.params as { productId: string };
+    return admin.listProductServices(params.productId);
+  });
+
+  app.put("/admin/products/:productId/services", async (request) => {
+    const params = request.params as { productId: string };
+    const input = productServicesSchema.parse(request.body);
+    return admin.replaceProductServices(params.productId, input.services ?? input.serviceIds ?? []);
+  });
+
   app.get("/admin/services", async () => admin.listServices());
   app.post("/admin/services", async (request, reply) => {
     const input = serviceSchema.parse(request.body);
-    return reply.code(201).send(await admin.upsertService(stripUndefined(input)));
+    const service = await admin.upsertService(stripUndefined(input));
+    try {
+      await publishServiceFinancialCatalogUpserted(service);
+    } catch (error) {
+      request.log.warn({ err: error, serviceId: service.id, serviceKey: service.key }, "service financial sync publish failed");
+    }
+    return reply.code(201).send(service);
   });
   app.patch("/admin/services/:serviceKey", async (request) => {
     const params = request.params as { serviceKey: string };
     const existing = (await admin.listServices()).find((service) => service.key === params.serviceKey);
     const input = serviceSchema.partial().parse(request.body);
-    return admin.upsertService(stripUndefined({
+    const service = await admin.upsertService(stripUndefined({
       ...input,
       key: params.serviceKey,
       name: input.name ?? existing?.name ?? params.serviceKey
     }));
+    try {
+      await publishServiceFinancialCatalogUpserted(service);
+    } catch (error) {
+      request.log.warn({ err: error, serviceId: service.id, serviceKey: service.key }, "service financial sync publish failed");
+    }
+    return service;
   });
 }
 
@@ -261,7 +312,8 @@ const adminPermissions = [
   "admin.products.read",
   "admin.products.write",
   "admin.services.read",
-  "admin.services.write"
+  "admin.services.write",
+  "financial.admin"
 ];
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {

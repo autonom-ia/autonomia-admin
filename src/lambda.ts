@@ -7,6 +7,7 @@ let proxyPromise: Promise<ReturnType<typeof awsLambdaFastify>> | undefined;
 async function getProxy() {
   proxyPromise ??= buildServer().then((app) =>
     awsLambdaFastify(app, {
+      binaryMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif", "application/octet-stream"],
       decorateRequest: false
     })
   );

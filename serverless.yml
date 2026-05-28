@@ -32,6 +32,7 @@ provider:
     DATABASE_SSL_MODE: ${env:DATABASE_SSL_MODE, "require"}
     DATABASE_SSL_REJECT_UNAUTHORIZED: ${env:DATABASE_SSL_REJECT_UNAUTHORIZED, "false"}
     AUTH_SYNC_QUEUE_URL: ${env:AUTH_SYNC_QUEUE_URL, "https://sqs.${self:provider.region}.amazonaws.com/140023375763/autonomia-auth-sync"}
+    FINANCIAL_SYNC_QUEUE_URL: ${env:FINANCIAL_SYNC_QUEUE_URL, "https://sqs.${self:provider.region}.amazonaws.com/140023375763/autonomia-financial-sync"}
     JWT_ISSUER: ${env:JWT_ISSUER, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E"}
     JWT_AUDIENCE: ${env:JWT_AUDIENCE, "6amud6bb0ecrmhp5sm24slk4g6"}
     JWKS_URL: ${env:JWKS_URL, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E/.well-known/jwks.json"}
@@ -52,6 +53,10 @@ provider:
           Action:
             - sqs:SendMessage
           Resource: arn:aws:sqs:${self:provider.region}:140023375763:autonomia-auth-sync
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource: arn:aws:sqs:${self:provider.region}:140023375763:autonomia-financial-sync
         - Effect: Allow
           Action:
             - s3:GetObject
