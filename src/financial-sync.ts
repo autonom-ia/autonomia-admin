@@ -91,3 +91,44 @@ async function publishFinancialCatalogItemUpserted(input: {
 
   return event;
 }
+
+export interface ProductServicesSyncedEvent {
+  eventId: string;
+  eventType: "admin.product.services_synced";
+  occurredAt: string;
+  source: "admin";
+  data: {
+    operatorKey: "autonom-ia";
+    operatorName: "Autonom.ia";
+    product: { key: string };
+    services: Array<{ key: string; displayOrder: number }>;
+  };
+}
+
+export async function publishProductServicesSynced(productKey: string, services: Array<{ key: string; displayOrder: number }>) {
+  if (!config.financialSyncQueueUrl) {
+    throw new Error("FINANCIAL_SYNC_QUEUE_URL is required to publish product services sync events.");
+  }
+
+  const event: ProductServicesSyncedEvent = {
+    eventId: randomUUID(),
+    eventType: "admin.product.services_synced",
+    occurredAt: new Date().toISOString(),
+    source: "admin",
+    data: {
+      operatorKey: "autonom-ia",
+      operatorName: "Autonom.ia",
+      product: { key: productKey },
+      services
+    }
+  };
+
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: config.financialSyncQueueUrl,
+      MessageBody: JSON.stringify(event)
+    })
+  );
+
+  return event;
+}

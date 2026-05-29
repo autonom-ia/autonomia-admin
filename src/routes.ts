@@ -3,7 +3,7 @@ import { z } from "zod";
 import { publishProductCustomizationUpserted, publishProductUpserted } from "./auth-sync.js";
 import { requirePrincipal } from "./auth.js";
 import { getPool } from "./db.js";
-import { publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted } from "./financial-sync.js";
+import { publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
 import { AdminRepository } from "./repository.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
@@ -274,7 +274,21 @@ export async function registerRoutes(app: FastifyInstance) {
   app.put("/admin/products/:productId/services", async (request) => {
     const params = request.params as { productId: string };
     const input = productServicesSchema.parse(request.body);
-    return admin.replaceProductServices(params.productId, input.services ?? input.serviceIds ?? []);
+    const result = await admin.replaceProductServices(params.productId, input.services ?? input.serviceIds ?? []);
+    try {
+      const product = await admin.getProductById(params.productId);
+      if (product) {
+        const allServices = await admin.listServices();
+        const serviceKeyById = new Map(allServices.map((service) => [service.id, service.key]));
+        const services = result
+          .map((entry) => ({ key: serviceKeyById.get(entry.serviceId), displayOrder: entry.displayOrder }))
+          .filter((entry): entry is { key: string; displayOrder: number } => Boolean(entry.key));
+        await publishProductServicesSynced(product.key, services);
+      }
+    } catch (cause) {
+      request.log.error({ err: cause }, "failed to publish product services sync event");
+    }
+    return result;
   });
 
   app.get("/admin/services", async () => admin.listServices());
