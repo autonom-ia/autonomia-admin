@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { AdminProduct, AdminProductCustomization, AdminProfile, AdminRole, AdminService, AdminUser, ProductService } from "./types.js";
+import type { AdminOrganization, AdminProduct, AdminProductCustomization, AdminProfile, AdminRole, AdminService, AdminUser, ProductService } from "./types.js";
 
 export interface UpsertProductInput {
   key: string;
@@ -119,7 +119,9 @@ export class AdminRepository {
        RETURNING id`,
       [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
     );
-    return this.getUserById(String(result.rows[0].id));
+    const user = await this.getUserById(String(result.rows[0].id));
+    await this.ensureDefaultUserOrganization(user.id);
+    return user;
   }
 
   async upsertUser(input: UpsertUserInput) {
@@ -144,7 +146,54 @@ export class AdminRepository {
         input.status ?? existing?.status ?? "active"
       ]
     );
-    return this.getUserById(String(result.rows[0].id));
+    const user = await this.getUserById(String(result.rows[0].id));
+    await this.ensureDefaultUserOrganization(user.id);
+    return user;
+  }
+
+  async listUserOrganizations(userId: string): Promise<AdminOrganization[]> {
+    const result = await this.db.query(
+      `SELECT
+         o.id,
+         o.key,
+         o.name,
+         o.status,
+         uo.role,
+         uo.is_primary,
+         uo.status AS membership_status,
+         uo.created_at,
+         uo.updated_at
+       FROM admin.user_organizations uo
+       INNER JOIN admin.organizations o ON o.id = uo.organization_id
+       WHERE uo.user_id = $1
+       ORDER BY uo.is_primary DESC, o.name ASC`,
+      [userId]
+    );
+    return result.rows.map(mapOrganization);
+  }
+
+  private async ensureDefaultUserOrganization(userId: string) {
+    await this.db.query(
+      `WITH has_primary AS (
+         SELECT EXISTS (
+           SELECT 1
+           FROM admin.user_organizations
+           WHERE user_id = $1
+             AND is_primary = true
+             AND status = 'active'
+         ) AS value
+       )
+       INSERT INTO admin.user_organizations (user_id, organization_id, role, is_primary, status)
+       SELECT $1, o.id, 'admin', NOT hp.value, 'active'
+       FROM admin.organizations o
+       CROSS JOIN has_primary hp
+       WHERE o.key = 'autonomia'
+       ON CONFLICT (user_id, organization_id) DO UPDATE SET
+         is_primary = admin.user_organizations.is_primary OR EXCLUDED.is_primary,
+         status = 'active',
+         updated_at = now()`,
+      [userId]
+    );
   }
 
   async getUserById(userId: string) {
@@ -444,6 +493,20 @@ function mapUser(row: DbUserRow): AdminUser {
   };
 }
 
+function mapOrganization(row: DbOrganizationRow): AdminOrganization {
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    status: row.status,
+    role: row.role,
+    isPrimary: row.is_primary,
+    membershipStatus: row.membership_status,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at)
+  };
+}
+
 function mapProfile(row: DbProfileRow): AdminProfile {
   return {
     id: row.id,
@@ -558,6 +621,18 @@ interface DbProfileRow {
   name: string;
   description: string | null;
   status: AdminProfile["status"];
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+interface DbOrganizationRow {
+  id: string;
+  key: string;
+  name: string;
+  status: AdminOrganization["status"];
+  role: string;
+  is_primary: boolean;
+  membership_status: AdminOrganization["membershipStatus"];
   created_at: Date | string;
   updated_at: Date | string;
 }

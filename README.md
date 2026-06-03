@@ -96,10 +96,16 @@ Ao criar ou alterar produto/serviço no Admin, a API publica um evento para que 
 ## Escopo inicial
 
 - Usuários
+- Organizações e relacionamento usuário-organização
 - Profiles
 - Produtos
 - Services
 - Meu perfil
+
+Backlog apos validar Agents.ai:
+
+- Criar tela para cadastro de organizacoes e relacionamento com usuarios.
+- Alinhar Financial para substituir o conceito atual de empresa por `organization`; provedores/gateways passam a representar a ligacao de `organization_id` com o gateway de pagamento.
 
 ## Banco de dados
 
@@ -111,6 +117,8 @@ Migrations atuais:
 001_create_admin_schema.sql
 002_add_profiles_and_customizations.sql
 003_add_product_oauth_settings.sql
+004_add_product_service_display_order.sql
+005_create_organizations.sql
 ```
 
 A migration `002` cria:
@@ -119,6 +127,15 @@ A migration `002` cria:
 admin.profiles
 admin.product_customizations
 ```
+
+A migration `005` cria:
+
+```text
+admin.organizations
+admin.user_organizations
+```
+
+Ela tambem cria a organizacao inicial `Autonom.ia` (`key = autonomia`) e relaciona os usuarios existentes a ela como organizacao primaria.
 
 E faz seed do profile inicial:
 

@@ -23,6 +23,18 @@ export interface AdminProfile {
   updatedAt: string;
 }
 
+export interface AdminOrganization {
+  id: string;
+  key: string;
+  name: string;
+  status: AdminStatus;
+  role: string;
+  isPrimary: boolean;
+  membershipStatus: AdminStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AdminProduct {
   id: string;
   key: string;
@@ -100,7 +112,7 @@ export interface AdminRole {
 
 export interface AdminMe {
   user: AdminUser;
-  organizations: Array<{ id: string; name: string }>;
+  organizations: AdminOrganization[];
   permissions: string[];
   profiles: AdminProfile[];
   services: AdminService[];

@@ -6,7 +6,8 @@ const migrations = [
   "001_create_admin_schema.sql",
   "002_add_profiles_and_customizations.sql",
   "003_add_product_oauth_settings.sql",
-  "004_add_product_service_display_order.sql"
+  "004_add_product_service_display_order.sql",
+  "005_create_organizations.sql"
 ];
 
 export async function runMigrations() {

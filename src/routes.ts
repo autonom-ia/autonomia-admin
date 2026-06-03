@@ -114,7 +114,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const user = await admin.ensureUser({ id: principal.id, email: principal.email, name: principal.name });
     return {
       user,
-      organizations: [{ id: "autonomia", name: "Autonom.ia" }],
+      organizations: await admin.listUserOrganizations(user.id),
       permissions: adminPermissions
     };
   });
