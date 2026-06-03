@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { config } from "./config.js";
-import type { AdminProduct, AdminService } from "./types.js";
+import type { AdminOrganization, AdminProduct, AdminService } from "./types.js";
 
 const sqs = new SQSClient({ region: config.awsRegion });
 
@@ -24,6 +24,51 @@ export interface FinancialCatalogItemUpsertedEvent {
       status: "active" | "inactive";
     };
   };
+}
+
+export interface FinancialOrganizationUpsertedEvent {
+  eventId: string;
+  eventType: "admin.organization.upserted";
+  occurredAt: string;
+  source: "admin";
+  data: {
+    organization: {
+      id: string;
+      key: string;
+      name: string;
+      status: "active" | "inactive";
+    };
+  };
+}
+
+export async function publishOrganizationFinancialUpserted(organization: AdminOrganization) {
+  if (!config.financialSyncQueueUrl) {
+    throw new Error("FINANCIAL_SYNC_QUEUE_URL is required to publish financial organization sync events.");
+  }
+
+  const event: FinancialOrganizationUpsertedEvent = {
+    eventId: randomUUID(),
+    eventType: "admin.organization.upserted",
+    occurredAt: new Date().toISOString(),
+    source: "admin",
+    data: {
+      organization: {
+        id: organization.id,
+        key: organization.key,
+        name: organization.name,
+        status: organization.status
+      }
+    }
+  };
+
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: config.financialSyncQueueUrl,
+      MessageBody: JSON.stringify(event)
+    })
+  );
+
+  return event;
 }
 
 export async function publishProductFinancialCatalogUpserted(product: AdminProduct) {

@@ -36,6 +36,13 @@ ON CONFLICT (key) DO UPDATE SET
   status = EXCLUDED.status,
   updated_at = now();
 
+INSERT INTO admin.organizations (id, key, name, status)
+VALUES ('14002337-5763-4000-8000-000000000002', 'hub2you', 'Hub2You', 'active')
+ON CONFLICT (key) DO UPDATE SET
+  name = EXCLUDED.name,
+  status = EXCLUDED.status,
+  updated_at = now();
+
 INSERT INTO admin.user_organizations (user_id, organization_id, role, is_primary, status)
 SELECT
   u.id,

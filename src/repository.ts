@@ -41,6 +41,13 @@ export interface UpsertUserInput {
   profileKey?: string | null | undefined;
 }
 
+export interface UpsertOrganizationInput {
+  id?: string | undefined;
+  key: string;
+  name: string;
+  status?: AdminOrganization["status"] | undefined;
+}
+
 export interface UpsertRoleInput {
   id?: string | undefined;
   name: string;
@@ -170,6 +177,29 @@ export class AdminRepository {
       [userId]
     );
     return result.rows.map(mapOrganization);
+  }
+
+  async listOrganizations(): Promise<AdminOrganization[]> {
+    const result = await this.db.query(
+      `SELECT id, key, name, status, created_at, updated_at
+       FROM admin.organizations
+       ORDER BY name ASC`
+    );
+    return result.rows.map(mapOrganization);
+  }
+
+  async upsertOrganization(input: UpsertOrganizationInput) {
+    const result = await this.db.query(
+      `INSERT INTO admin.organizations (id, key, name, status)
+       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4)
+       ON CONFLICT (key) DO UPDATE SET
+         name = EXCLUDED.name,
+         status = EXCLUDED.status,
+         updated_at = now()
+       RETURNING id, key, name, status, created_at, updated_at`,
+      [input.id ?? null, input.key, input.name, input.status ?? "active"]
+    );
+    return mapOrganization(result.rows[0] as DbOrganizationRow);
   }
 
   private async ensureDefaultUserOrganization(userId: string) {
@@ -630,9 +660,9 @@ interface DbOrganizationRow {
   key: string;
   name: string;
   status: AdminOrganization["status"];
-  role: string;
-  is_primary: boolean;
-  membership_status: AdminOrganization["membershipStatus"];
+  role?: string;
+  is_primary?: boolean;
+  membership_status?: AdminOrganization["membershipStatus"];
   created_at: Date | string;
   updated_at: Date | string;
 }

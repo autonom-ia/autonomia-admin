@@ -3,7 +3,7 @@ import { z } from "zod";
 import { publishProductCustomizationUpserted, publishProductUpserted } from "./auth-sync.js";
 import { requirePrincipal } from "./auth.js";
 import { getPool } from "./db.js";
-import { publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
+import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
 import { AdminRepository } from "./repository.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
@@ -58,6 +58,12 @@ const userSchema = z.object({
   status: z.enum(["active", "inactive", "invited"]).optional(),
   profileId: z.string().uuid().nullable().optional(),
   profileKey: z.string().min(1).nullable().optional()
+});
+
+const organizationSchema = z.object({
+  key: z.string().min(2).regex(/^[a-z0-9][a-z0-9-]*$/),
+  name: z.string().min(2),
+  status: z.enum(["active", "inactive"]).optional()
 });
 
 const profileSchema = z.object({
@@ -140,6 +146,34 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.get("/admin/profiles", async () => admin.listProfiles());
   app.get("/admin/permissions", async () => adminPermissions);
+
+  app.get("/admin/organizations", async () => admin.listOrganizations());
+  app.post("/admin/organizations", async (request, reply) => {
+    const input = organizationSchema.parse(request.body);
+    const organization = await admin.upsertOrganization(stripUndefined(input));
+    try {
+      await publishOrganizationFinancialUpserted(organization);
+    } catch (error) {
+      request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization financial sync publish failed");
+    }
+    return reply.code(201).send(organization);
+  });
+  app.patch("/admin/organizations/:organizationKey", async (request) => {
+    const params = request.params as { organizationKey: string };
+    const existing = (await admin.listOrganizations()).find((organization) => organization.key === params.organizationKey);
+    const input = organizationSchema.partial().parse(request.body);
+    const organization = await admin.upsertOrganization(stripUndefined({
+      ...input,
+      key: params.organizationKey,
+      name: input.name ?? existing?.name ?? params.organizationKey
+    }));
+    try {
+      await publishOrganizationFinancialUpserted(organization);
+    } catch (error) {
+      request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization financial sync publish failed");
+    }
+    return organization;
+  });
 
   app.get("/admin/users", async () => admin.listUsers());
   app.get("/admin/users/:userId", async (request, reply) => {
@@ -323,6 +357,8 @@ export async function registerRoutes(app: FastifyInstance) {
 const adminPermissions = [
   "admin.users.read",
   "admin.users.write",
+  "admin.organizations.read",
+  "admin.organizations.write",
   "admin.products.read",
   "admin.products.write",
   "admin.services.read",

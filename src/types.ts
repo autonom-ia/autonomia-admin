@@ -28,9 +28,9 @@ export interface AdminOrganization {
   key: string;
   name: string;
   status: AdminStatus;
-  role: string;
-  isPrimary: boolean;
-  membershipStatus: AdminStatus;
+  role?: string | undefined;
+  isPrimary?: boolean | undefined;
+  membershipStatus?: AdminStatus | undefined;
   createdAt: string;
   updatedAt: string;
 }
