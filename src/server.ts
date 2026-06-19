@@ -23,9 +23,12 @@ export async function buildServer() {
 
   await registerRoutes(app);
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const apiError = error as { statusCode?: number; message?: string };
     const statusCode = apiError.statusCode && apiError.statusCode >= 400 ? apiError.statusCode : 500;
+    if (statusCode >= 500) {
+      request.log.error({ err: error }, "request failed");
+    }
     const message = statusCode >= 500 ? "Internal server error." : apiError.message ?? "Invalid request.";
     return reply.code(statusCode).send({
       error: {
