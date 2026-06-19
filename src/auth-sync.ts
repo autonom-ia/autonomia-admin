@@ -28,6 +28,7 @@ export interface AdminProductUpsertedEvent {
       allowGithubLogin: boolean;
       allowEmailPasswordLogin: boolean;
       allowPasskeyLogin: boolean;
+      allowBackgroundAuth: boolean;
       accessTokenTtlSeconds: number;
       refreshTokenTtlSeconds: number;
     };
@@ -86,6 +87,7 @@ export async function publishProductUpserted(product: AdminProduct) {
         allowGithubLogin: product.allowGithubLogin,
         allowEmailPasswordLogin: product.allowEmailPasswordLogin,
         allowPasskeyLogin: product.allowPasskeyLogin,
+        allowBackgroundAuth: product.allowBackgroundAuth,
         accessTokenTtlSeconds: product.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: product.refreshTokenTtlSeconds
       }

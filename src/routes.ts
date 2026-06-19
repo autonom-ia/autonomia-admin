@@ -22,6 +22,7 @@ const productSchema = z.object({
   allowGithubLogin: z.boolean().optional(),
   allowEmailPasswordLogin: z.boolean().optional(),
   allowPasskeyLogin: z.boolean().optional(),
+  allowBackgroundAuth: z.boolean().optional(),
   accessTokenTtlSeconds: z.number().int().min(60).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).optional(),
   status: z.enum(["active", "inactive"]).optional()

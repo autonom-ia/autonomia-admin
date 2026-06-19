@@ -16,6 +16,7 @@ export interface UpsertProductInput {
   allowGithubLogin?: boolean | undefined;
   allowEmailPasswordLogin?: boolean | undefined;
   allowPasskeyLogin?: boolean | undefined;
+  allowBackgroundAuth?: boolean | undefined;
   accessTokenTtlSeconds?: number | undefined;
   refreshTokenTtlSeconds?: number | undefined;
   status?: AdminProduct["status"] | undefined;
@@ -271,10 +272,10 @@ export class AdminRepository {
       `INSERT INTO admin.products (
          key, name, description, logo_url, primary_color, accent_color, oauth_client_id,
          allowed_redirect_uris, allowed_logout_uris, allowed_origins,
-         allow_google_login, allow_github_login, allow_email_password_login, allow_passkey_login,
+         allow_google_login, allow_github_login, allow_email_password_login, allow_passkey_login, allow_background_auth,
          access_token_ttl_seconds, refresh_token_ttl_seconds, status, auth_sync_status, auth_sync_error, auth_synced_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'pending', NULL, NULL)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'pending', NULL, NULL)
        ON CONFLICT (key) DO UPDATE SET
          name = EXCLUDED.name,
          description = EXCLUDED.description,
@@ -289,6 +290,7 @@ export class AdminRepository {
          allow_github_login = EXCLUDED.allow_github_login,
          allow_email_password_login = EXCLUDED.allow_email_password_login,
          allow_passkey_login = EXCLUDED.allow_passkey_login,
+         allow_background_auth = EXCLUDED.allow_background_auth,
          access_token_ttl_seconds = EXCLUDED.access_token_ttl_seconds,
          refresh_token_ttl_seconds = EXCLUDED.refresh_token_ttl_seconds,
          status = EXCLUDED.status,
@@ -312,6 +314,7 @@ export class AdminRepository {
         input.allowGithubLogin ?? true,
         input.allowEmailPasswordLogin ?? true,
         input.allowPasskeyLogin ?? true,
+        input.allowBackgroundAuth ?? false,
         input.accessTokenTtlSeconds ?? 3600,
         input.refreshTokenTtlSeconds ?? 2592000,
         input.status ?? "active"
@@ -566,6 +569,7 @@ function mapProduct(row: DbProductRow): AdminProduct {
     allowGithubLogin: row.allow_github_login,
     allowEmailPasswordLogin: row.allow_email_password_login,
     allowPasskeyLogin: row.allow_passkey_login,
+    allowBackgroundAuth: row.allow_background_auth,
     accessTokenTtlSeconds: row.access_token_ttl_seconds,
     refreshTokenTtlSeconds: row.refresh_token_ttl_seconds,
     authSyncStatus: row.auth_sync_status,
@@ -683,6 +687,7 @@ interface DbProductRow {
   allow_github_login: boolean;
   allow_email_password_login: boolean;
   allow_passkey_login: boolean;
+  allow_background_auth: boolean;
   access_token_ttl_seconds: number;
   refresh_token_ttl_seconds: number;
   auth_sync_status: AdminProduct["authSyncStatus"];

@@ -51,6 +51,7 @@ export interface AdminProduct {
   allowGithubLogin: boolean;
   allowEmailPasswordLogin: boolean;
   allowPasskeyLogin: boolean;
+  allowBackgroundAuth: boolean;
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
   authSyncStatus: "pending" | "synced" | "failed";
