@@ -8,7 +8,8 @@ const migrations = [
   "003_add_product_oauth_settings.sql",
   "004_add_product_service_display_order.sql",
   "005_create_organizations.sql",
-  "007_add_product_background_auth.sql"
+  "007_add_product_background_auth.sql",
+  "008_rename_job_autonomia_product_key.sql"
 ];
 
 export async function runMigrations() {
