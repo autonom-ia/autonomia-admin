@@ -14,6 +14,8 @@ const productSchema = z.object({
   logoUrl: z.string().nullable().optional(),
   primaryColor: z.string().optional(),
   accentColor: z.string().optional(),
+  registerCallbackUrl: z.string().url().nullable().optional(),
+  termsUrl: z.string().url().nullable().optional(),
   oauthClientId: z.string().min(1).nullable().optional(),
   allowedRedirectUris: z.array(z.string().url()).optional(),
   allowedLogoutUris: z.array(z.string().url()).optional(),

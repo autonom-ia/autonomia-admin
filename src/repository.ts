@@ -8,6 +8,8 @@ export interface UpsertProductInput {
   logoUrl?: string | null | undefined;
   primaryColor?: string | undefined;
   accentColor?: string | undefined;
+  registerCallbackUrl?: string | null | undefined;
+  termsUrl?: string | null | undefined;
   oauthClientId?: string | null | undefined;
   allowedRedirectUris?: string[] | undefined;
   allowedLogoutUris?: string[] | undefined;
@@ -270,18 +272,20 @@ export class AdminRepository {
   async upsertProduct(input: UpsertProductInput) {
     const result = await this.db.query(
       `INSERT INTO admin.products (
-         key, name, description, logo_url, primary_color, accent_color, oauth_client_id,
+         key, name, description, logo_url, primary_color, accent_color, register_callback_url, terms_url, oauth_client_id,
          allowed_redirect_uris, allowed_logout_uris, allowed_origins,
          allow_google_login, allow_github_login, allow_email_password_login, allow_passkey_login, allow_background_auth,
          access_token_ttl_seconds, refresh_token_ttl_seconds, status, auth_sync_status, auth_sync_error, auth_synced_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'pending', NULL, NULL)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'pending', NULL, NULL)
        ON CONFLICT (key) DO UPDATE SET
          name = EXCLUDED.name,
          description = EXCLUDED.description,
          logo_url = EXCLUDED.logo_url,
          primary_color = EXCLUDED.primary_color,
          accent_color = EXCLUDED.accent_color,
+         register_callback_url = EXCLUDED.register_callback_url,
+         terms_url = EXCLUDED.terms_url,
          oauth_client_id = EXCLUDED.oauth_client_id,
          allowed_redirect_uris = EXCLUDED.allowed_redirect_uris,
          allowed_logout_uris = EXCLUDED.allowed_logout_uris,
@@ -306,6 +310,8 @@ export class AdminRepository {
         input.logoUrl ?? null,
         input.primaryColor ?? "#1E3A8A",
         input.accentColor ?? "#38BDF8",
+        input.registerCallbackUrl ?? null,
+        input.termsUrl ?? null,
         input.oauthClientId ?? input.key,
         input.allowedRedirectUris ?? [],
         input.allowedLogoutUris ?? [],
@@ -561,6 +567,8 @@ function mapProduct(row: DbProductRow): AdminProduct {
     logoUrl: row.logo_url,
     primaryColor: row.primary_color,
     accentColor: row.accent_color,
+    registerCallbackUrl: row.register_callback_url,
+    termsUrl: row.terms_url,
     oauthClientId: row.oauth_client_id,
     allowedRedirectUris: row.allowed_redirect_uris,
     allowedLogoutUris: row.allowed_logout_uris,
@@ -679,6 +687,8 @@ interface DbProductRow {
   logo_url: string | null;
   primary_color: string;
   accent_color: string;
+  register_callback_url: string | null;
+  terms_url: string | null;
   oauth_client_id: string | null;
   allowed_redirect_uris: string[];
   allowed_logout_uris: string[];

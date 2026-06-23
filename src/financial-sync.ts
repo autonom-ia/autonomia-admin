@@ -21,6 +21,11 @@ export interface FinancialCatalogItemUpsertedEvent {
       key: string;
       name: string;
       description: string | null;
+      logoUrl?: string | null;
+      primaryColor?: string | null;
+      accentColor?: string | null;
+      registerCallbackUrl?: string | null;
+      termsUrl?: string | null;
       status: "active" | "inactive";
     };
   };
@@ -79,6 +84,11 @@ export async function publishProductFinancialCatalogUpserted(product: AdminProdu
     key: product.key,
     name: product.name,
     description: product.description,
+    logoUrl: product.logoUrl,
+    primaryColor: product.primaryColor,
+    accentColor: product.accentColor,
+    registerCallbackUrl: product.registerCallbackUrl,
+    termsUrl: product.termsUrl,
     status: product.status
   });
 }
@@ -102,6 +112,11 @@ async function publishFinancialCatalogItemUpserted(input: {
   key: string;
   name: string;
   description: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  accentColor?: string | null;
+  registerCallbackUrl?: string | null;
+  termsUrl?: string | null;
   status: "active" | "inactive";
 }) {
   if (!config.financialSyncQueueUrl) {
@@ -122,6 +137,11 @@ async function publishFinancialCatalogItemUpserted(input: {
         key: input.key,
         name: input.name,
         description: input.description,
+        ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
+        ...(input.primaryColor !== undefined ? { primaryColor: input.primaryColor } : {}),
+        ...(input.accentColor !== undefined ? { accentColor: input.accentColor } : {}),
+        ...(input.registerCallbackUrl !== undefined ? { registerCallbackUrl: input.registerCallbackUrl } : {}),
+        ...(input.termsUrl !== undefined ? { termsUrl: input.termsUrl } : {}),
         status: input.status
       }
     }

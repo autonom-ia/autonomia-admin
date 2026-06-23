@@ -43,6 +43,8 @@ export interface AdminProduct {
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  registerCallbackUrl: string | null;
+  termsUrl: string | null;
   oauthClientId: string | null;
   allowedRedirectUris: string[];
   allowedLogoutUris: string[];
