@@ -9,7 +9,9 @@ const migrations = [
   "004_add_product_service_display_order.sql",
   "005_create_organizations.sql",
   "007_add_product_background_auth.sql",
-  "008_rename_job_autonomia_product_key.sql"
+  "008_rename_job_autonomia_product_key.sql",
+  "009_add_product_registration_urls.sql",
+  "010_configure_neuroai_registration_callback.sql"
 ];
 
 export async function runMigrations() {
