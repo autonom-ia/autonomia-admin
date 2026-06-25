@@ -224,6 +224,14 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
     }
   });
+  app.delete("/admin/users/:userId", async (request, reply) => {
+    const params = request.params as { userId: string };
+    try {
+      return await admin.softDeleteUser(params.userId);
+    } catch {
+      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
+    }
+  });
 
   app.get("/admin/products", async () => admin.listProducts());
   app.post("/admin/products", async (request, reply) => {

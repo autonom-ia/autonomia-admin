@@ -112,7 +112,7 @@ export class AdminRepository {
   }
 
   async listUsers(): Promise<AdminUser[]> {
-    const result = await this.db.query(userSelectSql("ORDER BY u.email ASC"));
+    const result = await this.db.query(userSelectSql("WHERE u.deleted_at IS NULL ORDER BY u.email ASC"));
     return result.rows.map(mapUser);
   }
 
@@ -125,6 +125,8 @@ export class AdminRepository {
          name = COALESCE(EXCLUDED.name, admin.users.name),
          photo_url = COALESCE(EXCLUDED.photo_url, admin.users.photo_url),
          profile_id = COALESCE(admin.users.profile_id, EXCLUDED.profile_id),
+         status = 'active',
+         deleted_at = NULL,
          updated_at = now()
        RETURNING id`,
       [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
@@ -145,6 +147,7 @@ export class AdminRepository {
          photo_url = EXCLUDED.photo_url,
          profile_id = EXCLUDED.profile_id,
          status = EXCLUDED.status,
+         deleted_at = NULL,
          updated_at = now()
        RETURNING id`,
       [
@@ -258,6 +261,62 @@ export class AdminRepository {
     );
     if (!result.rows[0]) throw new Error("User not found.");
     return this.getUserById(String(result.rows[0].id));
+  }
+
+  async softDeleteUser(userId: string) {
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      const userResult = await client.query(
+        `UPDATE admin.users
+         SET status = 'inactive', deleted_at = now(), updated_at = now()
+         WHERE id = $1
+         RETURNING id, email, identity_user_id`,
+        [userId]
+      );
+      const user = userResult.rows[0] as { id: string; email: string; identity_user_id: string | null } | undefined;
+      if (!user) throw new Error("User not found.");
+
+      await client.query(
+        `UPDATE admin.user_organizations
+         SET status = 'inactive', is_primary = false, updated_at = now()
+         WHERE user_id = $1`,
+        [user.id]
+      );
+
+      const schemaResult = await client.query(
+        `SELECT
+           to_regclass('auth.users') AS auth_users,
+           to_regclass('auth.organization_users') AS auth_organization_users`
+      );
+      if (schemaResult.rows[0]?.auth_users) {
+        const authUserResult = await client.query(
+          `UPDATE auth.users
+           SET status = 'inactive', updated_at = now()
+           WHERE ($1::text IS NOT NULL AND cognito_sub = $1::text)
+              OR email_normalized = lower($2::text)
+           RETURNING id`,
+          [user.identity_user_id, user.email]
+        );
+        const authUserIds = authUserResult.rows.map((row: { id: string }) => row.id);
+        if (authUserIds.length && schemaResult.rows[0]?.auth_organization_users) {
+          await client.query(
+            `UPDATE auth.organization_users
+             SET status = 'inactive', updated_at = now()
+             WHERE user_id = ANY($1::uuid[])`,
+            [authUserIds]
+          );
+        }
+      }
+
+      await client.query("COMMIT");
+      return this.getUserById(user.id);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listProducts(): Promise<AdminProduct[]> {
