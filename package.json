@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "migrate:local": "tsx scripts/run-local-migrations.ts",
-    "test": "vitest run",
+    "test": "vitest run --reporter=default --reporter=json --outputFile.json=.vitest-results.json && node scripts/assert-no-skipped-tests.mjs",
     "test:deploy-gate": "node scripts/check-production-deploy-gate.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
     "package": "serverless package --stage ci"

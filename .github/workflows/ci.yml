@@ -10,6 +10,20 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: autonomia_admin_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d autonomia_admin_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
@@ -27,5 +41,14 @@ jobs:
       - run: node scripts/check-production-deploy-gate.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm test
+      - name: Run migrations in disposable PostgreSQL
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/autonomia_admin_test
+          DATABASE_SSL_MODE: disable
+        run: pnpm migrate:local
+      - name: Run real database and JWKS tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/autonomia_admin_test
+          DATABASE_SSL_MODE: disable
+        run: pnpm test
       - run: pnpm build

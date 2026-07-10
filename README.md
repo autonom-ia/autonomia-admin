@@ -86,8 +86,28 @@ NEXT_PUBLIC_ADMIN_API_URL=http://localhost:3003
 
 Todas as rotas `/admin/*` exigem `Authorization: Bearer <jwt>`.
 
-Quando `JWKS_URL` estiver configurado, o token e validado via JWKS/Cognito.
-Para desenvolvimento local sem JWKS, remova `JWKS_URL` do `.env`; nesse modo o token e apenas decodificado para permitir testes de frontend.
+O token é validado via JWKS/Cognito. `JWKS_URL`, `JWT_ISSUER` e `JWT_AUDIENCE` são obrigatórios;
+a API falha ao iniciar se qualquer um estiver ausente.
+
+O bearer token deve ser um access token assinado com `token_use=access`. Quando o frontend enviar
+`X-Identity-Token`, ele também será validado via JWKS, deverá ter `token_use=id` e o mesmo `sub` do access token.
+Tokens sem assinatura não são aceitos nem em desenvolvimento.
+
+O login apenas sincroniza nome e foto de usuários ativos. Usuários `inactive`, `invited` ou removidos não são
+reativados implicitamente e recebem `403`; a ativação deve ocorrer pelo fluxo administrativo explícito.
+
+## Testes com PostgreSQL real
+
+Os testes funcionais não possuem fallback ou `skip`. Antes de executá-los, disponibilize um PostgreSQL descartável,
+aplique as migrations e então rode a suíte:
+
+```bash
+createdb autonomia_admin_test
+DATABASE_URL=postgres://localhost:5432/autonomia_admin_test DATABASE_SSL_MODE=disable pnpm migrate
+DATABASE_URL=postgres://localhost:5432/autonomia_admin_test DATABASE_SSL_MODE=disable pnpm test
+```
+
+O comando `pnpm test` falha se nenhum teste for executado ou se algum teste ficar pendente/skipped.
 
 ## Banco compartilhado e testes locais
 
