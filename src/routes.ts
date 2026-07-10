@@ -112,10 +112,10 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     request.principal = principal;
     try {
-      request.adminUser = await admin.syncAuthenticatedUser({
-        id: principal.id,
-        email: principal.email,
-        name: principal.name
+      request.adminUser = await admin.authenticateProvisionedUser({
+        identityUserId: principal.id,
+        ...(principal.verifiedEmail ? { verifiedEmail: principal.verifiedEmail } : {}),
+        ...(principal.verifiedName ? { verifiedName: principal.verifiedName } : {})
       });
     } catch (error) {
       if (error instanceof AdminUserAccessError) {

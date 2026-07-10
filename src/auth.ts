@@ -39,17 +39,13 @@ export async function requirePrincipal(request: FastifyRequest): Promise<Authent
   if (identitySubject && identitySubject !== subject) {
     throw new AuthError("Access and identity token subjects do not match.");
   }
-  const email =
-    stringClaim(profileClaims.email) ??
-    stringClaim(claims.email) ??
-    stringClaim(claims.username) ??
-    stringClaim(claims["cognito:username"]);
-  if (!email) throw new AuthError("Verified token does not contain an email.");
+  const verifiedEmail = identityToken ? verifiedIdentityEmail(profileClaims) : undefined;
+  const verifiedName = identityToken ? stringClaim(profileClaims.name) : undefined;
 
   return {
     id: subject,
-    email,
-    name: stringClaim(profileClaims.name) ?? stringClaim(claims.name) ?? email.split("@")[0] ?? email,
+    ...(verifiedEmail ? { verifiedEmail } : {}),
+    ...(verifiedName ? { verifiedName } : {}),
     ...(stringClaim(claims.token_use) ? { tokenUse: stringClaim(claims.token_use) } : {}),
     rawClaims: claims
   };
@@ -77,6 +73,17 @@ async function verifyToken(token: string, expectedTokenUse: "access" | "id"): Pr
 
 function stringClaim(value: unknown) {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function verifiedIdentityEmail(claims: Record<string, unknown>) {
+  if (claims.email_verified !== true) {
+    throw new AuthError("Identity token email is not verified.");
+  }
+  const email = stringClaim(claims.email);
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+    throw new AuthError("Identity token does not contain a valid email.");
+  }
+  return email;
 }
 
 function assertExpectedClient(claims: Record<string, unknown>, tokenUse: "access" | "id") {

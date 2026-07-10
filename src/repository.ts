@@ -123,37 +123,70 @@ export class AdminRepository {
     return result.rows.map(mapUser);
   }
 
-  async syncAuthenticatedUser(input: Pick<AdminUser, "email" | "name"> & { id?: string | undefined; photoUrl?: string | null | undefined }) {
-    const profile = await this.getDefaultProfile();
+  async authenticateProvisionedUser(input: { identityUserId: string; verifiedEmail?: string | undefined; verifiedName?: string | undefined }) {
+    const identityUserId = toUuidOrNull(input.identityUserId);
+    if (!identityUserId) throw new AdminUserAccessError();
+
+    const linked = await this.db.query(
+      `SELECT id, status, deleted_at
+       FROM admin.users
+       WHERE identity_user_id = $1
+       LIMIT 1`,
+      [identityUserId]
+    );
+    if (linked.rows[0]) {
+      const row = linked.rows[0] as { id: string; status: AdminUser["status"]; deleted_at: Date | null };
+      if (row.status !== "active" || row.deleted_at) throw new AdminUserAccessError();
+      if (input.verifiedName) {
+        await this.db.query(
+          `UPDATE admin.users
+           SET name = $2, updated_at = now()
+           WHERE id = $1`,
+          [row.id, input.verifiedName]
+        );
+      }
+      return this.getUserById(row.id);
+    }
+
+    if (!input.verifiedEmail) throw new AdminUserAccessError();
+    const candidates = await this.db.query(
+      `SELECT id, identity_user_id, status, deleted_at
+       FROM admin.users
+       WHERE lower(email) = lower($1)`,
+      [input.verifiedEmail]
+    );
+    if (candidates.rows.length !== 1) throw new AdminUserAccessError();
+
+    const candidate = candidates.rows[0] as {
+      id: string;
+      identity_user_id: string | null;
+      status: AdminUser["status"];
+      deleted_at: Date | null;
+    };
+    if (candidate.status !== "active" || candidate.deleted_at || candidate.identity_user_id) {
+      throw new AdminUserAccessError();
+    }
+
     let result;
     try {
       result = await this.db.query(
-        `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-         VALUES ($1, $2, $3, $4, $5, 'active')
-         ON CONFLICT (email) DO UPDATE SET
-           identity_user_id = COALESCE(admin.users.identity_user_id, EXCLUDED.identity_user_id),
-           name = COALESCE(EXCLUDED.name, admin.users.name),
-           photo_url = COALESCE(EXCLUDED.photo_url, admin.users.photo_url),
-           profile_id = COALESCE(admin.users.profile_id, EXCLUDED.profile_id),
-           updated_at = now()
-         WHERE admin.users.status = 'active'
-           AND admin.users.deleted_at IS NULL
-           AND (
-             admin.users.identity_user_id IS NULL
-             OR EXCLUDED.identity_user_id IS NULL
-             OR admin.users.identity_user_id = EXCLUDED.identity_user_id
-           )
+        `UPDATE admin.users
+         SET identity_user_id = $2,
+             name = COALESCE($3, name),
+             updated_at = now()
+         WHERE id = $1
+           AND (identity_user_id IS NULL OR identity_user_id = $2)
+           AND status = 'active'
+           AND deleted_at IS NULL
          RETURNING id`,
-        [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
+        [candidate.id, identityUserId, input.verifiedName ?? null]
       );
     } catch (error) {
       if (isUniqueViolation(error)) throw new AdminUserAccessError("Identity is already linked to another administrative user.");
       throw error;
     }
     if (!result.rows[0]) throw new AdminUserAccessError();
-    const user = await this.getUserById(String(result.rows[0].id));
-    await this.ensureDefaultUserOrganization(user.id);
-    return user;
+    return this.getUserById(String(result.rows[0].id));
   }
 
   async upsertUser(input: UpsertUserInput) {
