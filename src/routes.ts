@@ -138,7 +138,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const existing = request.adminUser;
     const input = profileSchema.parse(request.body);
     return admin.upsertUser(stripUndefined({
-      id: existing.id,
+      adminUserId: existing.id,
       email: existing.email,
       name: input.name ?? existing.name,
       photoUrl: input.photoUrl ?? existing.photoUrl ?? null,
@@ -199,18 +199,21 @@ export async function registerRoutes(app: FastifyInstance) {
       status: input.status ?? "invited"
     })));
   });
-  app.patch("/admin/users/:userId", async (request) => {
+  app.patch("/admin/users/:userId", async (request, reply) => {
     const params = request.params as { userId: string };
     const existing = await admin.getUserById(params.userId).catch(() => null);
+    if (!existing) {
+      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
+    }
     const input = userSchema.partial().parse(request.body);
     return admin.upsertUser(stripUndefined({
-      id: existing?.id ?? params.userId,
-      email: input.email ?? existing?.email ?? params.userId,
-      name: input.name ?? existing?.name ?? params.userId,
-      photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
-      status: input.status ?? existing?.status ?? "active",
-      profileId: input.profileId ?? existing?.profileId ?? null,
-      profileKey: input.profileKey ?? existing?.profileKey ?? null
+      adminUserId: existing.id,
+      email: input.email ?? existing.email,
+      name: input.name ?? existing.name,
+      photoUrl: input.photoUrl ?? existing.photoUrl ?? null,
+      status: input.status ?? existing.status,
+      profileId: input.profileId ?? existing.profileId ?? null,
+      profileKey: input.profileKey ?? existing.profileKey ?? null
     }));
   });
   app.post("/admin/users/:userId/activate", async (request, reply) => {

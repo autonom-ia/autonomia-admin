@@ -149,6 +149,96 @@ describe("admin api authentication", () => {
     expect(response.json().user).toMatchObject({ email, name: "Already Linked" });
   });
 
+  it("does not create or pre-link an arbitrary identity through a missing admin user PATCH", async () => {
+    const actorSubject = "24242424-2424-4242-8242-242424242424";
+    await provisionUser({
+      identityUserId: actorSubject,
+      email: `patch-actor${testEmailSuffix}`,
+      name: "Patch Actor"
+    });
+    const targetSubject = "25252525-2525-4252-8252-252525252525";
+    const token = await signAccessToken({ subject: actorSubject });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/admin/users/${targetSubject}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {}
+    });
+    const persisted = await database.query(
+      `SELECT id
+       FROM admin.users
+       WHERE id = $1 OR identity_user_id = $1`,
+      [targetSubject]
+    );
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: { code: "NOT_FOUND", message: "User not found." } });
+    expect(persisted.rowCount).toBe(0);
+  });
+
+  it("does not link an identity when the provisioned email changes concurrently", async () => {
+    const subject = "26262626-2626-4262-8262-262626262626";
+    const oldEmail = `link-race-old${testEmailSuffix}`;
+    const newEmail = `link-race-new${testEmailSuffix}`;
+    const userId = await provisionUser({ email: oldEmail, name: "Link Race Candidate" });
+    const headers = await neuroHeaders({ subject, email: oldEmail, name: "Old Email Principal" });
+    const locker = await database.connect();
+    let transactionOpen = false;
+    let pendingRequest: Promise<Awaited<ReturnType<typeof app.inject>>> | undefined;
+    try {
+      await locker.query("BEGIN");
+      transactionOpen = true;
+      await locker.query("UPDATE admin.users SET email = $2 WHERE id = $1", [userId, newEmail]);
+
+      pendingRequest = app.inject({ method: "GET", url: "/admin/me", headers });
+      await waitForLinkQueryBlocked();
+      await locker.query("COMMIT");
+      transactionOpen = false;
+
+      const response = await pendingRequest;
+      const persisted = await database.query(
+        "SELECT email, identity_user_id, name FROM admin.users WHERE id = $1",
+        [userId]
+      );
+      expect(response.statusCode).toBe(403);
+      expect(persisted.rows[0]).toMatchObject({
+        email: newEmail,
+        identity_user_id: null,
+        name: "Link Race Candidate"
+      });
+    } finally {
+      if (transactionOpen) await locker.query("ROLLBACK");
+      locker.release();
+      await pendingRequest?.catch(() => undefined);
+    }
+  });
+
+  it("allows only one subject to win a concurrent first link", async () => {
+    const email = `concurrent-link${testEmailSuffix}`;
+    await provisionUser({ email, name: "Concurrent Link Candidate" });
+    const subjects = [
+      "27272727-2727-4272-8272-272727272727",
+      "28282828-2828-4282-8282-282828282828"
+    ];
+    const [headersOne, headersTwo] = await Promise.all([
+      neuroHeaders({ subject: subjects[0]!, email, name: "Principal One" }),
+      neuroHeaders({ subject: subjects[1]!, email, name: "Principal Two" })
+    ]);
+
+    const responses = await Promise.all([
+      app.inject({ method: "GET", url: "/admin/me", headers: headersOne }),
+      app.inject({ method: "GET", url: "/admin/me", headers: headersTwo })
+    ]);
+    const persisted = await database.query(
+      "SELECT identity_user_id FROM admin.users WHERE email = $1",
+      [email]
+    );
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 403]);
+    expect(subjects).toContain(persisted.rows[0]?.identity_user_id);
+  });
+
   it("rejects an unsigned access token", async () => {
     const token = unsignedToken({
       sub: "33333333-3333-4333-8333-333333333333",
@@ -383,6 +473,25 @@ function unsignedToken(payload: Record<string, unknown>) {
 async function removeTestUsers() {
   if (!database) return;
   await database.query("DELETE FROM admin.users WHERE email LIKE $1", [`%${testEmailSuffix}`]);
+}
+
+async function waitForLinkQueryBlocked(timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await database.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM pg_stat_activity
+         WHERE datname = current_database()
+           AND pid <> pg_backend_pid()
+           AND wait_event_type = 'Lock'
+           AND query LIKE '%WITH candidates AS MATERIALIZED%'
+       ) AS blocked`
+    );
+    if (result.rows[0]?.blocked === true) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for the first-link query to block on the concurrent email update.");
 }
 
 async function provisionUser(input: {
