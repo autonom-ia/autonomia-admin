@@ -35,7 +35,7 @@ export interface UpsertServiceInput {
 }
 
 export interface UpsertUserInput {
-  id?: string | undefined;
+  adminUserId?: string | undefined;
   email: string;
   name: string;
   photoUrl?: string | null | undefined;
@@ -149,37 +149,35 @@ export class AdminRepository {
     }
 
     if (!input.verifiedEmail) throw new AdminUserAccessError();
-    const candidates = await this.db.query(
-      `SELECT id, identity_user_id, status, deleted_at
-       FROM admin.users
-       WHERE lower(email) = lower($1)`,
-      [input.verifiedEmail]
-    );
-    if (candidates.rows.length !== 1) throw new AdminUserAccessError();
-
-    const candidate = candidates.rows[0] as {
-      id: string;
-      identity_user_id: string | null;
-      status: AdminUser["status"];
-      deleted_at: Date | null;
-    };
-    if (candidate.status !== "active" || candidate.deleted_at || candidate.identity_user_id) {
-      throw new AdminUserAccessError();
-    }
-
     let result;
     try {
       result = await this.db.query(
-        `UPDATE admin.users
+        `WITH candidates AS MATERIALIZED (
+           SELECT id
+           FROM admin.users
+           WHERE lower(email) = lower($1)
+             AND identity_user_id IS NULL
+             AND status = 'active'
+             AND deleted_at IS NULL
+           FOR UPDATE
+         ),
+         eligible AS (
+           SELECT id
+           FROM candidates
+           WHERE (SELECT count(*) FROM candidates) = 1
+         )
+         UPDATE admin.users AS users
          SET identity_user_id = $2,
-             name = COALESCE($3, name),
+             name = COALESCE($3, users.name),
              updated_at = now()
-         WHERE id = $1
-           AND (identity_user_id IS NULL OR identity_user_id = $2)
-           AND status = 'active'
-           AND deleted_at IS NULL
-         RETURNING id`,
-        [candidate.id, identityUserId, input.verifiedName ?? null]
+         FROM eligible
+         WHERE users.id = eligible.id
+           AND lower(users.email) = lower($1)
+           AND users.identity_user_id IS NULL
+           AND users.status = 'active'
+           AND users.deleted_at IS NULL
+         RETURNING users.id`,
+        [input.verifiedEmail, identityUserId, input.verifiedName ?? null]
       );
     } catch (error) {
       if (isUniqueViolation(error)) throw new AdminUserAccessError("Identity is already linked to another administrative user.");
@@ -191,27 +189,49 @@ export class AdminRepository {
 
   async upsertUser(input: UpsertUserInput) {
     const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey });
-    const existing = input.id ? await this.getUserById(input.id).catch(() => null) : null;
-    const result = await this.db.query(
-      `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO UPDATE SET
-         name = EXCLUDED.name,
-         photo_url = EXCLUDED.photo_url,
-         profile_id = EXCLUDED.profile_id,
-         status = EXCLUDED.status,
-         deleted_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [
-        toUuidOrNull(existing?.id ?? input.id),
-        input.email,
-        input.name,
-        input.photoUrl ?? existing?.photoUrl ?? null,
-        profile.id,
-        input.status ?? existing?.status ?? "active"
-      ]
-    );
+    const existing = input.adminUserId ? await this.getUserById(input.adminUserId).catch(() => null) : null;
+    if (input.adminUserId && !existing) throw new Error("User not found.");
+
+    const result = existing
+      ? await this.db.query(
+        `UPDATE admin.users
+         SET email = $2,
+             name = $3,
+             photo_url = $4,
+             profile_id = $5,
+             status = $6,
+             deleted_at = NULL,
+             updated_at = now()
+         WHERE id = $1
+         RETURNING id`,
+        [
+          existing.id,
+          input.email,
+          input.name,
+          input.photoUrl ?? existing.photoUrl ?? null,
+          profile.id,
+          input.status ?? existing.status
+        ]
+      )
+      : await this.db.query(
+        `INSERT INTO admin.users (email, name, photo_url, profile_id, status)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (email) DO UPDATE SET
+           name = EXCLUDED.name,
+           photo_url = EXCLUDED.photo_url,
+           profile_id = EXCLUDED.profile_id,
+           status = EXCLUDED.status,
+           deleted_at = NULL,
+           updated_at = now()
+         RETURNING id`,
+        [
+          input.email,
+          input.name,
+          input.photoUrl ?? null,
+          profile.id,
+          input.status ?? "active"
+        ]
+      );
     const user = await this.getUserById(String(result.rows[0].id));
     await this.ensureDefaultUserOrganization(user.id);
     return user;
