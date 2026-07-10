@@ -59,8 +59,14 @@ O bearer token deve ser um access token assinado com `token_use=access`. Quando 
 `X-Identity-Token`, ele também será validado via JWKS, deverá ter `token_use=id` e o mesmo `sub` do access token.
 Tokens sem assinatura não são aceitos nem em desenvolvimento.
 
-O login apenas sincroniza nome e foto de usuários ativos. Usuários `inactive`, `invited` ou removidos não são
-reativados implicitamente e recebem `403`; a ativação deve ocorrer pelo fluxo administrativo explícito.
+O login nunca cria usuário, profile ou vínculo de organização. O usuário administrativo deve existir previamente
+com status `active`. No primeiro vínculo, `X-Identity-Token` é obrigatório, o email deve estar marcado como
+`email_verified=true` e o `sub` é associado ao usuário previamente provisionado com o mesmo email. Depois do vínculo,
+requisições somente com access token são aceitas pelo `sub`; claims `email`, `username` ou `cognito:username` do
+access token não são usadas para localizar ou criar usuário.
+
+Usuários não provisionados, `inactive`, `invited` ou removidos recebem `403`. Ativação, profile e membership devem
+ser definidos pelo fluxo administrativo explícito, nunca como efeito colateral do login.
 
 ## Testes com PostgreSQL real
 
@@ -73,7 +79,9 @@ DATABASE_URL=postgres://localhost:5432/autonomia_admin_test DATABASE_SSL_MODE=di
 DATABASE_URL=postgres://localhost:5432/autonomia_admin_test DATABASE_SSL_MODE=disable pnpm test
 ```
 
-O comando `pnpm test` falha se nenhum teste for executado ou se algum teste ficar pendente/skipped.
+O comando `pnpm test` falha se nenhum teste for executado ou se algum teste ficar pendente/skipped. A suíte recusa
+executar os testes mutativos da migration 008 fora de host local e banco cujo nome termine em `_test`; ela cobre o
+rename no schema Financial, colisão por operador e idempotência.
 
 ## RDS compartilhado
 

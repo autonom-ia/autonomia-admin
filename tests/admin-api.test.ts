@@ -64,29 +64,79 @@ afterAll(async () => {
 });
 
 describe("admin api authentication", () => {
-  it("accepts the signed Neuro access and identity token flow", async () => {
+  it("accepts the signed Neuro flow only for a previously provisioned administrator", async () => {
     const subject = "11111111-1111-4111-8111-111111111111";
+    const email = `neuro${testEmailSuffix}`;
+    const userId = await provisionUser({ email, name: "Provisioned Neuro Admin" });
     const headers = await neuroHeaders({
       subject,
-      email: `neuro${testEmailSuffix}`,
+      email,
       name: "Neuro Admin"
     });
 
     const response = await app.inject({ method: "GET", url: "/admin/me", headers });
+    const persisted = await database.query(
+      "SELECT identity_user_id, profile_id FROM admin.users WHERE id = $1",
+      [userId]
+    );
+    const memberships = await database.query(
+      "SELECT count(*)::int AS count FROM admin.user_organizations WHERE user_id = $1",
+      [userId]
+    );
 
     expect(response.statusCode).toBe(200);
     expect(response.json().user).toMatchObject({
-      email: `neuro${testEmailSuffix}`,
+      email,
       name: "Neuro Admin",
       status: "active"
     });
+    expect(persisted.rows[0]).toMatchObject({ identity_user_id: subject });
+    expect(persisted.rows[0]?.profile_id).not.toBeNull();
+    expect(memberships.rows[0]?.count).toBe(0);
   });
 
-  it("accepts a signed access token when it contains the profile claims", async () => {
+  it("rejects a valid Neuro identity that was not previously provisioned", async () => {
+    const email = `not-provisioned${testEmailSuffix}`;
+    const headers = await neuroHeaders({
+      subject: "12121212-1212-4212-8212-121212121212",
+      email,
+      name: "Not Provisioned"
+    });
+
+    const response = await app.inject({ method: "GET", url: "/admin/me", headers });
+    const persisted = await database.query("SELECT id FROM admin.users WHERE email = $1", [email]);
+
+    expect(response.statusCode).toBe(403);
+    expect(persisted.rowCount).toBe(0);
+  });
+
+  it("rejects an unlinked access token even when it contains profile-like claims", async () => {
+    const email = `access-only-unlinked${testEmailSuffix}`;
     const token = await signAccessToken({
       subject: "22222222-2222-4222-8222-222222222222",
-      email: `access-only${testEmailSuffix}`,
+      email,
       name: "Access Only"
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin/me",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    const persisted = await database.query("SELECT id FROM admin.users WHERE email = $1", [email]);
+
+    expect(response.statusCode).toBe(403);
+    expect(persisted.rowCount).toBe(0);
+  });
+
+  it("accepts an access-token-only request for a subject that is already linked", async () => {
+    const subject = "23232323-2323-4232-8232-232323232323";
+    const email = `access-only-linked${testEmailSuffix}`;
+    await provisionUser({ identityUserId: subject, email, name: "Already Linked" });
+    const token = await signAccessToken({
+      subject,
+      email: `ignored${testEmailSuffix}`,
+      name: "Must Not Replace"
     });
 
     const response = await app.inject({
@@ -96,7 +146,7 @@ describe("admin api authentication", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().user).toMatchObject({ email: `access-only${testEmailSuffix}`, name: "Access Only" });
+    expect(response.json().user).toMatchObject({ email, name: "Already Linked" });
   });
 
   it("rejects an unsigned access token", async () => {
@@ -214,9 +264,36 @@ describe("admin api authentication", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("rejects an identity token whose email is not verified and does not link it", async () => {
+    const subject = "89898989-8989-4898-8989-898989898989";
+    const email = `unverified${testEmailSuffix}`;
+    await provisionUser({ email, name: "Awaiting Verified Identity" });
+    const accessToken = await signAccessToken({ subject });
+    const identityToken = await signIdentityToken({
+      subject,
+      email,
+      name: "Unverified Identity",
+      emailVerified: false
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin/me",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "x-identity-token": identityToken
+      }
+    });
+    const persisted = await database.query("SELECT identity_user_id FROM admin.users WHERE email = $1", [email]);
+
+    expect(response.statusCode).toBe(401);
+    expect(persisted.rows[0]?.identity_user_id).toBeNull();
+  });
+
   it("does not reactivate an inactive user during login", async () => {
     const subject = "99999999-9999-4999-8999-999999999999";
     const email = `inactive${testEmailSuffix}`;
+    await provisionUser({ email, name: "Provisioned Active" });
     const initialHeaders = await neuroHeaders({ subject, email, name: "Active Before" });
     expect((await app.inject({ method: "GET", url: "/admin/me", headers: initialHeaders })).statusCode).toBe(200);
     await database.query("UPDATE admin.users SET status = 'inactive' WHERE email = $1", [email]);
@@ -233,6 +310,7 @@ describe("admin api authentication", () => {
   it("does not restore a soft-deleted user during login", async () => {
     const subject = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const email = `deleted${testEmailSuffix}`;
+    await provisionUser({ email, name: "Provisioned Deleted User" });
     const headers = await neuroHeaders({ subject, email, name: "Deleted User" });
     expect((await app.inject({ method: "GET", url: "/admin/me", headers })).statusCode).toBe(200);
     await database.query("UPDATE admin.users SET status = 'inactive', deleted_at = now() WHERE email = $1", [email]);
@@ -278,8 +356,13 @@ async function signAccessToken(input: {
     .sign(privateKey);
 }
 
-async function signIdentityToken(input: { subject: string; email: string; name: string }) {
-  return new SignJWT({ email: input.email, name: input.name, email_verified: true, token_use: "id" })
+async function signIdentityToken(input: { subject: string; email: string; name: string; emailVerified?: boolean }) {
+  return new SignJWT({
+    email: input.email,
+    name: input.name,
+    email_verified: input.emailVerified ?? true,
+    token_use: "id"
+  })
     .setProtectedHeader({ alg: "RS256", kid: keyId })
     .setIssuer(issuer)
     .setAudience(audience)
@@ -300,4 +383,25 @@ function unsignedToken(payload: Record<string, unknown>) {
 async function removeTestUsers() {
   if (!database) return;
   await database.query("DELETE FROM admin.users WHERE email LIKE $1", [`%${testEmailSuffix}`]);
+}
+
+async function provisionUser(input: {
+  identityUserId?: string;
+  email: string;
+  name: string;
+  status?: "active" | "inactive" | "invited";
+}) {
+  const result = await database.query(
+    `INSERT INTO admin.users (identity_user_id, email, name, profile_id, status)
+     VALUES (
+       $1,
+       $2,
+       $3,
+       (SELECT id FROM admin.profiles WHERE key = 'autonomia_master'),
+       $4
+     )
+     RETURNING id`,
+    [input.identityUserId ?? null, input.email, input.name, input.status ?? "active"]
+  );
+  return String(result.rows[0].id);
 }
