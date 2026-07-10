@@ -4,7 +4,7 @@ import { publishProductCustomizationUpserted, publishProductUpserted } from "./a
 import { requirePrincipal } from "./auth.js";
 import { getPool } from "./db.js";
 import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
-import { AdminRepository } from "./repository.js";
+import { AdminRepository, AdminUserAccessError } from "./repository.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
 const productSchema = z.object({
@@ -111,16 +111,22 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: { code: "UNAUTHORIZED", message: "Unauthorized." } });
     }
     request.principal = principal;
-    await admin.ensureUser({
-      id: principal.id,
-      email: principal.email,
-      name: principal.name
-    });
+    try {
+      request.adminUser = await admin.syncAuthenticatedUser({
+        id: principal.id,
+        email: principal.email,
+        name: principal.name
+      });
+    } catch (error) {
+      if (error instanceof AdminUserAccessError) {
+        return reply.code(403).send({ error: { code: "FORBIDDEN", message: "Administrative user is not active." } });
+      }
+      throw error;
+    }
   });
 
   app.get("/admin/me", async (request) => {
-    const principal = request.principal;
-    const user = await admin.ensureUser({ id: principal.id, email: principal.email, name: principal.name });
+    const user = request.adminUser;
     return {
       user,
       organizations: await admin.listUserOrganizations(user.id),
@@ -129,8 +135,7 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.patch("/admin/me", async (request) => {
-    const principal = request.principal;
-    const existing = await admin.ensureUser({ id: principal.id, email: principal.email, name: principal.name });
+    const existing = request.adminUser;
     const input = profileSchema.parse(request.body);
     return admin.upsertUser(stripUndefined({
       id: existing.id,

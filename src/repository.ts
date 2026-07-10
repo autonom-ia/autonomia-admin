@@ -75,6 +75,13 @@ export interface UpsertProductCustomizationInput {
   status?: AdminProductCustomization["status"] | undefined;
 }
 
+export class AdminUserAccessError extends Error {
+  constructor(message = "Administrative user is not active.") {
+    super(message);
+    this.name = "AdminUserAccessError";
+  }
+}
+
 export class AdminRepository {
   constructor(private readonly db: Pool) {}
 
@@ -116,21 +123,34 @@ export class AdminRepository {
     return result.rows.map(mapUser);
   }
 
-  async ensureUser(input: Pick<AdminUser, "email" | "name"> & { id?: string | undefined; photoUrl?: string | null | undefined }) {
+  async syncAuthenticatedUser(input: Pick<AdminUser, "email" | "name"> & { id?: string | undefined; photoUrl?: string | null | undefined }) {
     const profile = await this.getDefaultProfile();
-    const result = await this.db.query(
-      `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-       VALUES ($1, $2, $3, $4, $5, 'active')
-       ON CONFLICT (email) DO UPDATE SET
-         name = COALESCE(EXCLUDED.name, admin.users.name),
-         photo_url = COALESCE(EXCLUDED.photo_url, admin.users.photo_url),
-         profile_id = COALESCE(admin.users.profile_id, EXCLUDED.profile_id),
-         status = 'active',
-         deleted_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
-    );
+    let result;
+    try {
+      result = await this.db.query(
+        `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
+         VALUES ($1, $2, $3, $4, $5, 'active')
+         ON CONFLICT (email) DO UPDATE SET
+           identity_user_id = COALESCE(admin.users.identity_user_id, EXCLUDED.identity_user_id),
+           name = COALESCE(EXCLUDED.name, admin.users.name),
+           photo_url = COALESCE(EXCLUDED.photo_url, admin.users.photo_url),
+           profile_id = COALESCE(admin.users.profile_id, EXCLUDED.profile_id),
+           updated_at = now()
+         WHERE admin.users.status = 'active'
+           AND admin.users.deleted_at IS NULL
+           AND (
+             admin.users.identity_user_id IS NULL
+             OR EXCLUDED.identity_user_id IS NULL
+             OR admin.users.identity_user_id = EXCLUDED.identity_user_id
+           )
+         RETURNING id`,
+        [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new AdminUserAccessError("Identity is already linked to another administrative user.");
+      throw error;
+    }
+    if (!result.rows[0]) throw new AdminUserAccessError();
     const user = await this.getUserById(String(result.rows[0].id));
     await this.ensureDefaultUserOrganization(user.id);
     return user;
@@ -557,6 +577,10 @@ export class AdminRepository {
       status: input.status ?? "active"
     };
   }
+}
+
+function isUniqueViolation(error: unknown): error is { code: string } {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
 function userSelectSql(suffix: string) {

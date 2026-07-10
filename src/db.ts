@@ -19,6 +19,12 @@ export function getPool() {
   return pool;
 }
 
+export async function closePool() {
+  if (!pool) return;
+  await pool.end();
+  pool = undefined;
+}
+
 function resolveSslConfig(): pg.PoolConfig["ssl"] {
   if (!config.databaseSslMode || config.databaseSslMode === "disable") return undefined;
   return {
