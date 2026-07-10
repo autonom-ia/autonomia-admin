@@ -35,7 +35,7 @@ export interface UpsertServiceInput {
 }
 
 export interface UpsertUserInput {
-  id?: string | undefined;
+  adminUserId?: string | undefined;
   email: string;
   name: string;
   photoUrl?: string | null | undefined;
@@ -73,6 +73,13 @@ export interface UpsertProductCustomizationInput {
   themeTokens?: Record<string, unknown> | undefined;
   customCss?: Record<string, unknown> | undefined;
   status?: AdminProductCustomization["status"] | undefined;
+}
+
+export class AdminUserAccessError extends Error {
+  constructor(message = "Administrative user is not active.") {
+    super(message);
+    this.name = "AdminUserAccessError";
+  }
 }
 
 export class AdminRepository {
@@ -116,49 +123,115 @@ export class AdminRepository {
     return result.rows.map(mapUser);
   }
 
-  async ensureUser(input: Pick<AdminUser, "email" | "name"> & { id?: string | undefined; photoUrl?: string | null | undefined }) {
-    const profile = await this.getDefaultProfile();
-    const result = await this.db.query(
-      `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-       VALUES ($1, $2, $3, $4, $5, 'active')
-       ON CONFLICT (email) DO UPDATE SET
-         name = COALESCE(EXCLUDED.name, admin.users.name),
-         photo_url = COALESCE(EXCLUDED.photo_url, admin.users.photo_url),
-         profile_id = COALESCE(admin.users.profile_id, EXCLUDED.profile_id),
-         status = 'active',
-         deleted_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
+  async authenticateProvisionedUser(input: { identityUserId: string; verifiedEmail?: string | undefined; verifiedName?: string | undefined }) {
+    const identityUserId = toUuidOrNull(input.identityUserId);
+    if (!identityUserId) throw new AdminUserAccessError();
+
+    const linked = await this.db.query(
+      `SELECT id, status, deleted_at
+       FROM admin.users
+       WHERE identity_user_id = $1
+       LIMIT 1`,
+      [identityUserId]
     );
-    const user = await this.getUserById(String(result.rows[0].id));
-    await this.ensureDefaultUserOrganization(user.id);
-    return user;
+    if (linked.rows[0]) {
+      const row = linked.rows[0] as { id: string; status: AdminUser["status"]; deleted_at: Date | null };
+      if (row.status !== "active" || row.deleted_at) throw new AdminUserAccessError();
+      if (input.verifiedName) {
+        await this.db.query(
+          `UPDATE admin.users
+           SET name = $2, updated_at = now()
+           WHERE id = $1`,
+          [row.id, input.verifiedName]
+        );
+      }
+      return this.getUserById(row.id);
+    }
+
+    if (!input.verifiedEmail) throw new AdminUserAccessError();
+    let result;
+    try {
+      result = await this.db.query(
+        `WITH candidates AS MATERIALIZED (
+           SELECT id
+           FROM admin.users
+           WHERE lower(email) = lower($1)
+             AND identity_user_id IS NULL
+             AND status = 'active'
+             AND deleted_at IS NULL
+           FOR UPDATE
+         ),
+         eligible AS (
+           SELECT id
+           FROM candidates
+           WHERE (SELECT count(*) FROM candidates) = 1
+         )
+         UPDATE admin.users AS users
+         SET identity_user_id = $2,
+             name = COALESCE($3, users.name),
+             updated_at = now()
+         FROM eligible
+         WHERE users.id = eligible.id
+           AND lower(users.email) = lower($1)
+           AND users.identity_user_id IS NULL
+           AND users.status = 'active'
+           AND users.deleted_at IS NULL
+         RETURNING users.id`,
+        [input.verifiedEmail, identityUserId, input.verifiedName ?? null]
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new AdminUserAccessError("Identity is already linked to another administrative user.");
+      throw error;
+    }
+    if (!result.rows[0]) throw new AdminUserAccessError();
+    return this.getUserById(String(result.rows[0].id));
   }
 
   async upsertUser(input: UpsertUserInput) {
     const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey });
-    const existing = input.id ? await this.getUserById(input.id).catch(() => null) : null;
-    const result = await this.db.query(
-      `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO UPDATE SET
-         name = EXCLUDED.name,
-         photo_url = EXCLUDED.photo_url,
-         profile_id = EXCLUDED.profile_id,
-         status = EXCLUDED.status,
-         deleted_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [
-        toUuidOrNull(existing?.id ?? input.id),
-        input.email,
-        input.name,
-        input.photoUrl ?? existing?.photoUrl ?? null,
-        profile.id,
-        input.status ?? existing?.status ?? "active"
-      ]
-    );
+    const existing = input.adminUserId ? await this.getUserById(input.adminUserId).catch(() => null) : null;
+    if (input.adminUserId && !existing) throw new Error("User not found.");
+
+    const result = existing
+      ? await this.db.query(
+        `UPDATE admin.users
+         SET email = $2,
+             name = $3,
+             photo_url = $4,
+             profile_id = $5,
+             status = $6,
+             deleted_at = NULL,
+             updated_at = now()
+         WHERE id = $1
+         RETURNING id`,
+        [
+          existing.id,
+          input.email,
+          input.name,
+          input.photoUrl ?? existing.photoUrl ?? null,
+          profile.id,
+          input.status ?? existing.status
+        ]
+      )
+      : await this.db.query(
+        `INSERT INTO admin.users (email, name, photo_url, profile_id, status)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (email) DO UPDATE SET
+           name = EXCLUDED.name,
+           photo_url = EXCLUDED.photo_url,
+           profile_id = EXCLUDED.profile_id,
+           status = EXCLUDED.status,
+           deleted_at = NULL,
+           updated_at = now()
+         RETURNING id`,
+        [
+          input.email,
+          input.name,
+          input.photoUrl ?? null,
+          profile.id,
+          input.status ?? "active"
+        ]
+      );
     const user = await this.getUserById(String(result.rows[0].id));
     await this.ensureDefaultUserOrganization(user.id);
     return user;
@@ -557,6 +630,10 @@ export class AdminRepository {
       status: input.status ?? "active"
     };
   }
+}
+
+function isUniqueViolation(error: unknown): error is { code: string } {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
 function userSelectSql(suffix: string) {

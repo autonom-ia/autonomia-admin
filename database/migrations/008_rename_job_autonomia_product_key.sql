@@ -13,6 +13,12 @@ END $$;
 
 DO $$
 BEGIN
+  -- The Admin schema must also migrate in isolated test databases where the
+  -- optional shared Financial schema is not installed.
+  IF to_regclass('financial.catalog_items') IS NULL THEN
+    RETURN;
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM financial.catalog_items source

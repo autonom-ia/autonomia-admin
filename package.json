@@ -10,7 +10,7 @@
     "start": "node dist/server.js",
     "migrate": "tsx src/migrate.ts",
     "migrate:dist": "node dist/migrate.js",
-    "test": "vitest run",
+    "test": "vitest run --reporter=default --reporter=json --outputFile.json=.vitest-results.json && node scripts/assert-no-skipped-tests.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
     "package": "serverless package",
     "deploy": "serverless deploy"

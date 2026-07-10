@@ -124,8 +124,8 @@ export interface AdminMe {
 
 export interface AuthenticatedPrincipal {
   id: string;
-  email: string;
-  name: string;
+  verifiedEmail?: string | undefined;
+  verifiedName?: string | undefined;
   tokenUse?: string | undefined;
   rawClaims: Record<string, unknown>;
 }

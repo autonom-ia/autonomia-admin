@@ -1,9 +1,11 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { assertAuthConfiguration } from "./auth.js";
 import { config } from "./config.js";
 import { registerRoutes } from "./routes.js";
 
 export async function buildServer() {
+  assertAuthConfiguration();
   const app = Fastify({
     logger: {
       level: process.env.LOG_LEVEL ?? "info"
