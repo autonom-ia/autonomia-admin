@@ -31,10 +31,44 @@ PATCH /admin/services/:serviceKey
 
 ```bash
 pnpm install
-cp .env.example .env
-pnpm migrate
+
+# Crie um Postgres local dedicado. Não use o RDS nem o túnel SSM.
+createdb -h 127.0.0.1 -p 5432 -U postgres autonomia_admin_local
+export ADMIN_LOCAL_DATABASE_INSTANCE_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+psql -h 127.0.0.1 -p 5432 -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 \
+  -c "ALTER DATABASE autonomia_admin_local SET app.environment = 'local'" \
+  -c "ALTER DATABASE autonomia_admin_local SET app.local_instance_id = '$ADMIN_LOCAL_DATABASE_INSTANCE_ID'"
+
+export APP_ENV=local
+export ADMIN_LOCAL_MIGRATION_CONFIRM=autonomia_admin_local
+export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/autonomia_admin_local
+export DATABASE_SSL_MODE=disable
+export AUTH_SYNC_QUEUE_URL=
+export FINANCIAL_SYNC_QUEUE_URL=
+export ADMIN_ASSETS_BUCKET=
+export JWKS_URL=
+
+pnpm migrate:local
 pnpm dev
 ```
+
+`migrate:local` conecta primeiro e só aplica SQL depois de confirmar o host
+literal `127.0.0.1`, porta `5432`, nome `autonomia_admin_local`, SSL desativado,
+confirmação explícita, endereço/porta reais do servidor e os dois marcadores
+persistidos especificamente no database via `pg_db_role_setting`. O UUID local
+precisa coincidir com `ADMIN_LOCAL_DATABASE_INSTANCE_ID`. A ferramenta recusa
+`localhost`, IPv6, Docker, qualquer variável `PG*`, parâmetros/fragmentos na
+URL, túneis e o banco compartilhado. `src/migrate.ts` não é um entrypoint.
+
+O runner local não executa `008_rename_job_autonomia_product_key.sql`, pois essa
+migration altera `financial.catalog_items` de outro projeto. Ela continua
+bloqueada para release e precisa ser substituída por uma mudança aditiva no
+repositório Financial antes de qualquer ativação produtiva.
+
+O `.env.example` é apenas referência e contém endpoints remotos; não o copie
+para executar migrations. Migrations de staging/produção seguem exclusivamente
+o runbook aprovado e não fazem parte do setup local.
 
 URL local:
 
@@ -55,10 +89,13 @@ Todas as rotas `/admin/*` exigem `Authorization: Bearer <jwt>`.
 Quando `JWKS_URL` estiver configurado, o token e validado via JWKS/Cognito.
 Para desenvolvimento local sem JWKS, remova `JWKS_URL` do `.env`; nesse modo o token e apenas decodificado para permitir testes de frontend.
 
-## RDS compartilhado
+## Banco compartilhado e testes locais
 
-O Admin API usa o mesmo RDS do Identity/Auth e grava no schema `admin`.
-Nao existe Postgres local nem fallback em arquivo para as rotas administrativas.
+O ambiente publicado legado usa o mesmo RDS do Identity/Auth e grava no schema
+`admin`. A suíte mutativa local **não pode** apontar para esse RDS, túnel, Docker,
+`localhost`, IPv6 ou qualquer database compartilhado. Ela só é habilitada no
+Postgres local dedicado `127.0.0.1:5432/autonomia_admin_local`, com confirmação,
+UUID e markers persistentes validados antes do primeiro request.
 
 Variáveis obrigatórias:
 
@@ -71,7 +108,8 @@ AUTH_SYNC_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/140023375763/autonomia-a
 FINANCIAL_SYNC_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/140023375763/autonomia-financial-sync
 ```
 
-Para testar localmente com o RDS privado, abra um tunel SSM em uma sessao separada:
+O script legado de túnel permanece disponível apenas para diagnóstico
+operacional separadamente autorizado:
 
 ```bash
 ./scripts/start_rds_tunnel.sh 5433
@@ -84,7 +122,9 @@ Se nao houver instancia online, informe explicitamente:
 BASTION_INSTANCE_ID=i-xxxxxxxxxxxxxxxxx ./scripts/start_rds_tunnel.sh 5433
 ```
 
-Com o tunel aberto, o `.env` local deve apontar o `DATABASE_URL` para `localhost:5433`.
+Não execute `pnpm test`, `pnpm migrate:local` nem requests funcionais mutativos
+através desse túnel. Um smoke remoto futuro deverá usar comando separado,
+credencial estritamente read-only e review próprio; esse smoke ainda não existe.
 
 `AUTH_SYNC_QUEUE_URL` aponta para a fila criada pelo Identity/Auth e é obrigatório para criar ou alterar produtos.
 Ao salvar um produto, a API publica `admin.product.upserted`; o consumer do Auth faz upsert em `auth.oauth_clients`.

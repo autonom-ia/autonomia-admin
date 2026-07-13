@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { getPool } from "../src/db.js";
+import {
+  assertConnectedLocalDatabase,
+  assertLocalMigrationEnvironment
+} from "../src/local-migration-guard.js";
 import { buildServer } from "../src/server.js";
 
 const token = [
@@ -35,6 +40,11 @@ const idTokenWithProfile = [
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
 describeWithDatabase("admin api", () => {
+  beforeAll(async () => {
+    const target = assertLocalMigrationEnvironment(process.env);
+    await assertConnectedLocalDatabase(getPool(), target);
+  });
+
   it("includes the authenticated principal in /admin/users", async () => {
     const app = await buildServer();
     const response = await app.inject({

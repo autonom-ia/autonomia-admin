@@ -19,7 +19,7 @@ custom:
 provider:
   name: aws
   runtime: nodejs20.x
-  stage: ${opt:stage, "prod"}
+  stage: ${opt:stage}
   region: ${opt:region, "us-east-1"}
   memorySize: 512
   timeout: 28
@@ -27,7 +27,7 @@ provider:
   environment:
     NODE_ENV: production
     CORS_ORIGINS: ${env:CORS_ORIGINS, "https://neuroai.autonomia.site,http://localhost:3002"}
-    DATABASE_URL: ${ssm:/autonomia/${self:provider.stage}/admin/database-url}
+    DATABASE_URL: ${file(./config/database-url.${self:provider.stage}.yml):value}
     DATABASE_POOL_MAX: ${env:DATABASE_POOL_MAX, "5"}
     DATABASE_SSL_MODE: ${env:DATABASE_SSL_MODE, "require"}
     DATABASE_SSL_REJECT_UNAUTHORIZED: ${env:DATABASE_SSL_REJECT_UNAUTHORIZED, "false"}

@@ -8,12 +8,11 @@
     "dev": "tsx watch src/local.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "migrate": "tsx src/migrate.ts",
-    "migrate:dist": "node dist/migrate.js",
+    "migrate:local": "tsx scripts/run-local-migrations.ts",
     "test": "vitest run",
+    "test:deploy-gate": "node scripts/check-production-deploy-gate.mjs",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "package": "serverless package",
-    "deploy": "serverless deploy"
+    "package": "serverless package --stage ci"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1052.0",

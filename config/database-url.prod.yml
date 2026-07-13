@@ -1,0 +1,1 @@
+value: ${ssm:/autonomia/prod/admin/database-url}

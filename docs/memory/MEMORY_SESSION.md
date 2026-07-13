@@ -34,22 +34,22 @@ Project status:
 
 <!-- Substituir abaixo a cada nova sessão. Sessões anteriores vão para PROGRESS.md. -->
 
-## Sessão: 2026-07-13 12:33 — atualizar Harness para 2.1.2
-Issue: #9
-Branch: docs/update-agent-harness-v1
-PR: não aberta
+## Sessão: 2026-07-13 13:02 — bloquear deploy e migration automáticos
+Issue: #8
+Branch: fix/8-production-deploy-gate
+PR: Draft #11
 Estado: em_progresso
 Modelo: strong + human
-Arquivos alterados: manifestos, blocos marcados em AGENTS/CLAUDE, STATUS e memória
-Comandos executados: diagnóstico; apply-harness-to-repo; install frozen; lint; test; build; validate-harness; doctor; diff review
-Validação: primeiro review RED P1=1/P2=1/P3=1 por permissões contraditórias, workflow 2.0.2 e import duplicado; segundo/terceiro reviews encontraram bypasses no filtro upstream 2.1.2; Issue agent-harness#14 criada e filtro removido, preservando scan estrito 2.0.2; lint/build verdes; testes 3/3 ignorados sem banco; Harness estrutural 0/0; novo review pendente
-Bloqueios: nenhum
-Próxima ação: validar Harness, testes/build e review crítico; abrir Draft PR empilhada sobre #5
+Arquivos alterados: CI, package.json, checker, runner/guard/testes de migration local, deploy/runbook, STATUS, memória, audit e health report
+Comandos executados: auditoria cross-repo; gate 31 fixtures; lint; Vitest; build; package ci; stage ausente/qa; túnel/banco compartilhado; entrypoint direto; YAML; Harness/Doctor
+Validação: review final independente GREEN P0=P1=P2=P3=0 no hash staged `36427dab…`; 31 fixtures, 28/28 com Postgres local, RDS/túnel bloqueado, lint/build/package/YAML/Harness verdes; migration 008 cross-project excluída do local/bloqueada para release
+Bloqueios: CI remoto do novo SHA; migration 008 precisa de substituição aditiva no Financial antes de release
+Próxima ação: commit/push da atualização da PR #11 e CI remoto, sem merge/deploy
 Project status:
   - Projeto: Infra
-  - Status: Em desenvolvimento
-  - Tipo: Infra
-  - Prioridade: P1
-  - Risco: Baixo
-  - Ambiente: Dev
-  - Próxima ação: revisar atualização do Harness 2.1.2 sem merge
+  - Status: Ajustes
+  - Tipo: Segurança
+  - Prioridade: P0
+  - Risco: Alto
+  - Ambiente: Produção
+  - Próxima ação: revisar deploy-gate; não executar release

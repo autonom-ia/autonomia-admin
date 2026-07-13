@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getPool } from "./db.js";
 
-const migrations = [
+export const PRODUCTION_MIGRATIONS = [
   "001_create_admin_schema.sql",
   "002_add_profiles_and_customizations.sql",
   "003_add_product_oauth_settings.sql",
@@ -13,21 +13,31 @@ const migrations = [
   "009_add_product_registration_urls.sql",
   "010_configure_neuroai_registration_callback.sql",
   "011_add_user_soft_delete.sql"
-];
+] as const;
 
-export async function runMigrations() {
+export const LOCAL_ADMIN_MIGRATIONS = [
+  "001_create_admin_schema.sql",
+  "002_add_profiles_and_customizations.sql",
+  "003_add_product_oauth_settings.sql",
+  "004_add_product_service_display_order.sql",
+  "005_create_organizations.sql",
+  "007_add_product_background_auth.sql",
+  "009_add_product_registration_urls.sql",
+  "010_configure_neuroai_registration_callback.sql",
+  "011_add_user_soft_delete.sql"
+] as const;
+
+export async function runMigrations(
+  migrations: readonly string[] = PRODUCTION_MIGRATIONS
+) {
   const pool = getPool();
-  for (const migration of migrations) {
-    const sql = await readFile(join(process.cwd(), "database", "migrations", migration), "utf8");
-    await pool.query(sql);
-    console.info(`Applied ${migration}`);
+  try {
+    for (const migration of migrations) {
+      const sql = await readFile(join(process.cwd(), "database", "migrations", migration), "utf8");
+      await pool.query(sql);
+      console.info(`Applied ${migration}`);
+    }
+  } finally {
+    await pool.end();
   }
-  await pool.end();
-}
-
-if (process.argv[1]?.endsWith("migrate.js") || process.argv[1]?.endsWith("migrate.ts")) {
-  runMigrations().catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
 }
