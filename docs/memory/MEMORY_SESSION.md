@@ -37,14 +37,14 @@ Project status:
 ## Sessão: 2026-07-13 19:18 — isolar autorização por organização
 Issue: #4 (dependência #3)
 Branch: feat/4-organization-scope
-PR: não aberta
-Estado: em_progresso
+PR: #13 (Draft, empilhada na #12)
+Estado: em_review
 Modelo: strong + human
 Arquivos alterados: types/fastify/repository/routes/migrate; migration 013; testes API/migration/guard; README/STATUS/memória/audit/runbook; closure exato do deploy-gate
 Comandos executados: investigação read-only; pnpm install/lint; migrate:local; Vitest PostgreSQL/JWKS; deploy-gate
 Validação: 66/66 testes reais, zero skips; duas organizações, selector forjado/malformado, 404 não enumerável, member sem elevação, identidade compartilhada preservada, email comercial reservado, replay 005 bloqueado, constraint exata, last-admin e revogação concorrente verdes
-Bloqueios: CI remoto da futura Draft PR
-Próxima ação: abrir Draft PR empilhada na #12 e monitorar CI, sem merge/deploy
+Bloqueios: CI remoto da Draft PR #13
+Próxima ação: monitorar CI da Draft PR #13, sem merge/deploy
 Project status:
   - Projeto: Infra
   - Status: Em review
@@ -52,4 +52,4 @@ Project status:
   - Prioridade: P0
   - Risco: Alto
   - Ambiente: Local
-  - Próxima ação: review da Issue #4; manter sem merge/deploy
+  - Próxima ação: CI remoto e review da Draft PR #13; manter sem merge/deploy

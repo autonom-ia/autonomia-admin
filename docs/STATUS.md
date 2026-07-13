@@ -9,7 +9,7 @@ controles produtivos ainda não certificados.
 |-----------|:------:|--------------------|
 | Build | verde local; package stage ci verde | 2026-07-13 |
 | Testes | 66/66, zero skips, com PostgreSQL/JWKS reais e matriz de duas organizações | 2026-07-13 |
-| CI | RBAC na Draft PR #12 verde; escopo organizacional local verde, CI remoto pendente | 2026-07-13 |
+| CI | RBAC na Draft PR #12 verde; Draft PR #13 aberta, CI remoto em execução | 2026-07-13 |
 | Deploy produção | workflow hard-disabled; review final P0-P3=0 | 2026-07-13 |
 | Harness instalado | 2.1.2 local nesta branch | 2026-07-13 |
 | Harness drift | base 2.1.2 + overrides restritivos e secret-scan estrito | 2026-07-13 |
@@ -46,8 +46,8 @@ ou dado de cliente foi tocado.
 
 ## Próxima ação
 
-Abrir Draft PR da Issue #4 empilhada na #12 e validar CI remoto, sem
-merge/deploy. O review adversarial final está GREEN, P0=P1=P2=P3=0. A Issue #8 permanece aberta para
+Validar o CI remoto da Draft PR #13, empilhada na #12, sem merge/deploy. O
+review adversarial final está GREEN, P0=P1=P2=P3=0. A Issue #8 permanece aberta para
 release por SHA, Environment, migration, smoke e rollback.
 
 Validação local: gate antes do install com 31 fixtures físicas; allowlists
