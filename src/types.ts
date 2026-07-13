@@ -1,4 +1,5 @@
 export type AdminStatus = "active" | "inactive";
+export type AdminOrganizationRole = "admin" | "member" | "platform_superadmin";
 
 export interface AdminUser {
   id: string;
@@ -28,11 +29,18 @@ export interface AdminOrganization {
   key: string;
   name: string;
   status: AdminStatus;
-  role?: string | undefined;
+  role?: AdminOrganizationRole | undefined;
   isPrimary?: boolean | undefined;
   membershipStatus?: AdminStatus | undefined;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminOrganizationUser extends AdminUser {
+  organizationRole: Exclude<AdminOrganizationRole, "platform_superadmin">;
+  membershipStatus: AdminStatus;
+  isPrimary: boolean;
+  membershipUpdatedAt: string;
 }
 
 export interface AdminProduct {

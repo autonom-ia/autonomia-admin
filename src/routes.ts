@@ -5,7 +5,7 @@ import { requirePrincipal } from "./auth.js";
 import { config } from "./config.js";
 import { getPool } from "./db.js";
 import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
-import { AdminRepository, AdminUserAccessError, ProtectedPlatformSuperadminError } from "./repository.js";
+import { AdminRepository, AdminUserAccessError, LastOrganizationAdminError, OrganizationAccessError, OrganizationUserConflictError, OrganizationUserNotFoundError, ProtectedPlatformSuperadminError } from "./repository.js";
 import { ADMIN_PERMISSIONS, type AdminPermission } from "./types.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
@@ -65,6 +65,19 @@ const userSchema = z.object({
   profileKey: z.string().min(1).nullable().optional()
 });
 
+const organizationInvitationSchema = userSchema.omit({ status: true }).extend({
+  role: z.enum(["admin", "member"]).optional()
+}).strict();
+
+const organizationMembershipSchema = z.object({
+  role: z.enum(["admin", "member"]).optional(),
+  status: z.enum(["active", "inactive"]).optional()
+}).strict().refine((value) => value.role !== undefined || value.status !== undefined, {
+  message: "At least one membership field is required."
+});
+
+const uuidSchema = z.string().uuid();
+
 const organizationSchema = z.object({
   key: z.string().min(2).regex(/^[a-z0-9][a-z0-9-]*$/),
   name: z.string().min(2),
@@ -95,6 +108,29 @@ export async function registerRoutes(app: FastifyInstance) {
   const requirePermission = (permission: AdminPermission) => async (request: FastifyRequest, reply: FastifyReply) => {
     if (request.adminPermissions.includes(permission)) return;
     return reply.code(403).send({ error: { code: "FORBIDDEN", message: "Insufficient administrative permission." } });
+  };
+  const requireOrganizationAdmin = (access: "read" | "write") => async (request: FastifyRequest, reply: FastifyReply) => {
+    const rawSelector = request.headers["x-organization-id"];
+    const selector = typeof rawSelector === "string" ? uuidSchema.safeParse(rawSelector) : null;
+    if (rawSelector !== undefined && (!selector || !selector.success)) {
+      return forbiddenOrganization(reply);
+    }
+    const platformPermission = `admin.users.${access}` as AdminPermission;
+    const allowPlatformAccess = request.adminPermissions.includes(platformPermission);
+    try {
+      const organization = await admin.resolveOrganizationAccess({
+        userId: request.adminUser.id,
+        ...(selector?.success ? { organizationId: selector.data } : {}),
+        allowPlatformAccess
+      });
+      if (!organization || (organization.role !== "admin" && !allowPlatformAccess)) {
+        return forbiddenOrganization(reply);
+      }
+      request.adminOrganization = organization;
+    } catch (error) {
+      if (error instanceof OrganizationAccessError) return forbiddenOrganization(reply);
+      throw error;
+    }
   };
 
   app.get("/health", async () => ({ ok: true, service: "autonomia-admin" }));
@@ -210,81 +246,105 @@ export async function registerRoutes(app: FastifyInstance) {
     return organization;
   });
 
-  app.get("/admin/users", { preHandler: requirePermission("admin.users.read") }, async () => admin.listUsers());
-  app.get("/admin/users/:userId", { preHandler: requirePermission("admin.users.read") }, async (request, reply) => {
-    const params = request.params as { userId: string };
-    try {
-      return await admin.getUser(params.userId);
-    } catch {
-      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
-    }
+  app.get("/admin/users", { preHandler: requireOrganizationAdmin("read") }, async (request) => {
+    return admin.listOrganizationUsers(request.adminOrganization!.id);
   });
-  app.post("/admin/users/invitations", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
-    const input = userSchema.parse(request.body);
+  app.get("/admin/users/:userId", { preHandler: requireOrganizationAdmin("read") }, async (request, reply) => {
+    const params = request.params as { userId: string };
+    const userId = uuidSchema.safeParse(params.userId);
+    if (!userId.success) return notFoundUser(reply);
     try {
-      return reply.code(201).send(await admin.upsertUser(stripUndefined({
-        ...input,
-        status: input.status ?? "invited"
-      })));
+      return await admin.getOrganizationUser(request.adminOrganization!.id, userId.data);
     } catch (error) {
-      if (error instanceof ProtectedPlatformSuperadminError) {
-        return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
-      }
+      if (error instanceof OrganizationUserNotFoundError) return notFoundUser(reply);
       throw error;
     }
   });
-  app.patch("/admin/users/:userId", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
-    const params = request.params as { userId: string };
-    const existing = await admin.getUserById(params.userId).catch(() => null);
-    if (!existing) {
-      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
+  app.post("/admin/users/invitations", { preHandler: requireOrganizationAdmin("write") }, async (request, reply) => {
+    const input = organizationInvitationSchema.parse(request.body);
+    if (input.email.toLowerCase() === config.platformSuperadminEmail) {
+      return reply.code(409).send({
+        error: { code: "CONFLICT", message: "The reserved platform superadmin email cannot be invited through tenant routes." }
+      });
     }
-    const input = userSchema.partial().parse(request.body);
     try {
-      return await admin.upsertUser(stripUndefined({
-        adminUserId: existing.id,
-        email: input.email ?? existing.email,
-        name: input.name ?? existing.name,
-        photoUrl: input.photoUrl ?? existing.photoUrl ?? null,
-        status: input.status ?? existing.status,
-        profileId: input.profileId ?? existing.profileId ?? null,
-        profileKey: input.profileKey ?? existing.profileKey ?? null
-      }));
+      return reply.code(201).send(await admin.inviteOrganizationUser(
+        request.adminOrganization!.id,
+        request.adminUser.id,
+        stripUndefined(input)
+      ));
     } catch (error) {
-      if (error instanceof ProtectedPlatformSuperadminError) {
+      if (error instanceof ProtectedPlatformSuperadminError || error instanceof OrganizationUserConflictError) {
         return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
       }
+      if (error instanceof OrganizationAccessError) return forbiddenOrganization(reply);
       throw error;
     }
   });
-  app.post("/admin/users/:userId/activate", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
+  app.patch("/admin/users/:userId", { preHandler: requireOrganizationAdmin("write") }, async (request, reply) => {
     const params = request.params as { userId: string };
+    const userId = uuidSchema.safeParse(params.userId);
+    if (!userId.success) return notFoundUser(reply);
+    const input = organizationMembershipSchema.parse(request.body);
     try {
-      return await admin.updateUserStatus(params.userId, "active");
-    } catch {
-      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
-    }
-  });
-  app.post("/admin/users/:userId/deactivate", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
-    const params = request.params as { userId: string };
-    try {
-      return await admin.updateUserStatus(params.userId, "inactive");
+      return await admin.updateOrganizationUserMembership(
+        request.adminOrganization!.id,
+        userId.data,
+        request.adminUser.id,
+        stripUndefined(input)
+      );
     } catch (error) {
-      if (error instanceof ProtectedPlatformSuperadminError) {
+      if (error instanceof OrganizationUserNotFoundError) return notFoundUser(reply);
+      if (error instanceof LastOrganizationAdminError || error instanceof OrganizationUserConflictError) {
         return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
       }
-      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
+      if (error instanceof OrganizationAccessError) return forbiddenOrganization(reply);
+      throw error;
     }
   });
-  app.delete("/admin/users/:userId", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
+  app.post("/admin/users/:userId/activate", { preHandler: requireOrganizationAdmin("write") }, async (request, reply) => {
     const params = request.params as { userId: string };
+    const userId = uuidSchema.safeParse(params.userId);
+    if (!userId.success) return notFoundUser(reply);
     try {
-      return await admin.softDeleteUser(params.userId);
+      return await admin.updateOrganizationUserMembership(
+        request.adminOrganization!.id,
+        userId.data,
+        request.adminUser.id,
+        { status: "active" }
+      );
     } catch (error) {
-      if (error instanceof ProtectedPlatformSuperadminError) {
-        return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
-      }
-      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
+      return handleOrganizationUserMutationError(error, reply);
+    }
+  });
+  app.post("/admin/users/:userId/deactivate", { preHandler: requireOrganizationAdmin("write") }, async (request, reply) => {
+    const params = request.params as { userId: string };
+    const userId = uuidSchema.safeParse(params.userId);
+    if (!userId.success) return notFoundUser(reply);
+    try {
+      return await admin.updateOrganizationUserMembership(
+        request.adminOrganization!.id,
+        userId.data,
+        request.adminUser.id,
+        { status: "inactive" }
+      );
+    } catch (error) {
+      return handleOrganizationUserMutationError(error, reply);
+    }
+  });
+  app.delete("/admin/users/:userId", { preHandler: requireOrganizationAdmin("write") }, async (request, reply) => {
+    const params = request.params as { userId: string };
+    const userId = uuidSchema.safeParse(params.userId);
+    if (!userId.success) return notFoundUser(reply);
+    try {
+      return await admin.updateOrganizationUserMembership(
+        request.adminOrganization!.id,
+        userId.data,
+        request.adminUser.id,
+        { status: "inactive" }
+      );
+    } catch (error) {
+      return handleOrganizationUserMutationError(error, reply);
     }
   });
 
@@ -422,4 +482,23 @@ export async function registerRoutes(app: FastifyInstance) {
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+}
+
+function forbiddenOrganization(reply: FastifyReply) {
+  return reply.code(403).send({
+    error: { code: "FORBIDDEN", message: "Organization access is not allowed." }
+  });
+}
+
+function notFoundUser(reply: FastifyReply) {
+  return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
+}
+
+function handleOrganizationUserMutationError(error: unknown, reply: FastifyReply) {
+  if (error instanceof OrganizationUserNotFoundError) return notFoundUser(reply);
+  if (error instanceof LastOrganizationAdminError || error instanceof OrganizationUserConflictError) {
+    return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
+  }
+  if (error instanceof OrganizationAccessError) return forbiddenOrganization(reply);
+  throw error;
 }

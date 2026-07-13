@@ -34,17 +34,17 @@ Project status:
 
 <!-- Substituir abaixo a cada nova sessão. Sessões anteriores vão para PROGRESS.md. -->
 
-## Sessão: 2026-07-13 18:29 — consolidar JWT fail-closed e ativar RBAC global
-Issue: #3 (dependências #2 e #8)
-Branch: feat/3-platform-rbac
-PR: Draft #12
-Estado: em_progresso
+## Sessão: 2026-07-13 19:18 — isolar autorização por organização
+Issue: #4 (dependência #3)
+Branch: feat/4-organization-scope
+PR: #13 (Draft, empilhada na #12)
+Estado: em_review
 Modelo: strong + human
-Arquivos alterados: auth/config/repository/routes/types; migration 012; CI; testes JWT/RBAC/migrations; README/STATUS/memória/audit/runbook; closure exato do deploy-gate
-Comandos executados: consolidação dos commits da PR #6 sobre #11; pnpm install/lint; migrate:local duas vezes; Vitest PostgreSQL/JWKS; revisão cross-repo
-Validação: gate verde; lint/build/package/audit/Harness verdes; 55/55 testes reais, zero skips; bootstrap one-shot, RBAC persistido, lockout protegido inclusive por trigger direto e em corrida, route matrix e 403 sem escrita verdes; migration 008 segue excluída do runner Local/CI
-Bloqueios: aprovação humana e merge/deploy permanecem fora deste slice
-Próxima ação: manter a Draft PR #12 em review e seguir para a Issue #4 em branch própria
+Arquivos alterados: types/fastify/repository/routes/migrate; migration 013; testes API/migration/guard; README/STATUS/memória/audit/runbook; closure exato do deploy-gate
+Comandos executados: investigação read-only; pnpm install/lint; migrate:local; Vitest PostgreSQL/JWKS; deploy-gate
+Validação: 66/66 testes reais, zero skips; duas organizações, selector forjado/malformado, 404 não enumerável, member sem elevação, identidade compartilhada preservada, email comercial reservado, replay 005 bloqueado, constraint exata, last-admin e revogação concorrente verdes
+Bloqueios: aprovação humana das Draft PRs empilhadas #12 e #13
+Próxima ação: aprovação da Draft PR #13, sem merge/deploy
 Project status:
   - Projeto: Infra
   - Status: Em review
@@ -52,4 +52,4 @@ Project status:
   - Prioridade: P0
   - Risco: Alto
   - Ambiente: Local
-  - Próxima ação: Issue #4; manter a Draft PR #12 sem merge/deploy
+  - Próxima ação: aprovação humana da Draft PR #13; manter sem merge/deploy

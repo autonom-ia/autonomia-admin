@@ -127,6 +127,26 @@ Rotas protegidas usam autenticação read-only. Primeiro vínculo por email para
 um usuário administrativo comum só é permitido em `GET /admin/me`; uma request
 negada em outra rota não atualiza nome, `identity_user_id`, produto ou fila.
 
+### Isolamento por organização
+
+As rotas `/admin/users/**` são tenant-scoped. O selector explícito é o header
+`X-Organization-Id` com UUID da organização. Sem header, o backend usa a
+membership primária ativa ou, se existir somente uma membership ativa, essa
+única organização. Selector malformado, organização inativa, membership
+inativa, organização estrangeira ou contexto ambíguo retornam o mesmo `403`.
+
+Somente membership `admin` ativa pode ler ou alterar o diretório tenant.
+Membership `member` não ganha permissões globais e não pode elevar a si mesma.
+O superadmin da plataforma pode operar uma organização ativa com selector
+explícito, mas continua precisando das permissões globais persistidas.
+
+Convites criam ou reutilizam a identidade global sem sobrescrever email, nome,
+profile, status ou vínculo de Identity já existentes. A nova membership começa
+inativa e preserva o role existente em retries; activate/deactivate/delete
+alteram apenas a membership selecionada. Email/nome/foto próprios continuam em
+`PATCH /admin/me`. Produtos OAuth corporativos, services, customizações e
+uploads permanecem globais e superadmin-only.
+
 ## Testes com PostgreSQL real
 
 Os testes funcionais não possuem fallback ou `skip`. Use o mesmo PostgreSQL
@@ -217,6 +237,7 @@ Migrations atuais:
 010_configure_neuroai_registration_callback.sql
 011_add_user_soft_delete.sql
 012_add_platform_superadmin_rbac.sql
+013_add_organization_scope.sql
 ```
 
 A migration `002` cria:

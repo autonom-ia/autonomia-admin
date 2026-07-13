@@ -20,6 +20,8 @@ const keyId = "admin-auth-test-key";
 const testEmailSuffix = "@admin-auth.test";
 const platformSuperadminSubject = "10101010-1010-4010-8010-101010101010";
 const platformSuperadminEmail = "comercial@autonomia.site";
+const autonomiaOrganizationId = "14002337-5763-4000-8000-000000000001";
+const hub2youOrganizationId = "14002337-5763-4000-8000-000000000002";
 
 let app: FastifyInstance;
 let database: Pool;
@@ -161,7 +163,10 @@ describe("admin api authentication", () => {
       const bootstrap = await app.inject({ method: "GET", url: "/admin/me", headers });
       const userId = String(bootstrap.json().user.id);
       const token = await signAccessToken({ subject: platformSuperadminSubject });
-      const accessHeaders = { authorization: `Bearer ${token}` };
+      const accessHeaders = {
+        authorization: `Bearer ${token}`,
+        "x-organization-id": autonomiaOrganizationId
+      };
       const authUserId = "14101010-1010-4010-8010-101010101010";
       await database.query(
         `INSERT INTO auth.users (id, cognito_sub, email_normalized, status)
@@ -180,7 +185,7 @@ describe("admin api authentication", () => {
         method: "PATCH",
         url: `/admin/users/${userId}`,
         headers: accessHeaders,
-        payload: { email: `changed${testEmailSuffix}` }
+        payload: { status: "inactive" }
       });
       const deactivate = await app.inject({
         method: "POST",
@@ -237,6 +242,40 @@ describe("admin api authentication", () => {
     expect(response.statusCode).toBe(403);
     expect(users.rowCount).toBe(0);
     expect(audit.rowCount).toBe(0);
+  });
+
+  it("does not let a tenant invitation reserve the commercial identity before bootstrap", async () => {
+    const actorSubject = "10a01010-1010-4010-8010-101010101010";
+    const actorId = await provisionUser({
+      identityUserId: actorSubject,
+      email: `commercial-invite-actor${testEmailSuffix}`,
+      name: "Commercial Invite Actor"
+    });
+    await addMembership({
+      userId: actorId,
+      organizationId: autonomiaOrganizationId,
+      role: "admin",
+      isPrimary: true
+    });
+    const token = await signAccessToken({ subject: actorSubject });
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/users/invitations",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-organization-id": autonomiaOrganizationId
+      },
+      payload: { email: platformSuperadminEmail, name: "Reserved Commercial" }
+    });
+    const persisted = await database.query(
+      "SELECT id FROM admin.users WHERE lower(email) = lower($1)",
+      [platformSuperadminEmail]
+    );
+    const bootstrap = await database.query("SELECT id FROM admin.platform_role_bootstrap");
+
+    expect(response.statusCode).toBe(409);
+    expect(persisted.rowCount).toBe(0);
+    expect(bootstrap.rowCount).toBe(0);
   });
 
   it("does not bootstrap the configured subject without a verified identity token", async () => {
@@ -345,6 +384,364 @@ describe("admin api authentication", () => {
     }
   });
 
+  it("scopes the user directory to the active organization and rejects forged selectors", async () => {
+    const adminSubject = "31313131-3131-4313-8313-313131313131";
+    const memberSubject = "32323232-3232-4323-8323-323232323232";
+    const foreignSubject = "34343434-3434-4343-8343-343434343434";
+    const adminId = await provisionUser({
+      identityUserId: adminSubject,
+      email: `org-a-admin${testEmailSuffix}`,
+      name: "Org A Admin"
+    });
+    const memberId = await provisionUser({
+      identityUserId: memberSubject,
+      email: `org-a-member${testEmailSuffix}`,
+      name: "Org A Member"
+    });
+    const foreignId = await provisionUser({
+      identityUserId: foreignSubject,
+      email: `org-b-user${testEmailSuffix}`,
+      name: "Org B User"
+    });
+    await addMembership({ userId: adminId, organizationId: autonomiaOrganizationId, role: "admin", isPrimary: true });
+    await addMembership({ userId: memberId, organizationId: autonomiaOrganizationId, role: "member", isPrimary: true });
+    await addMembership({ userId: foreignId, organizationId: hub2youOrganizationId, role: "admin", isPrimary: true });
+
+    const adminToken = await signAccessToken({ subject: adminSubject });
+    const memberToken = await signAccessToken({ subject: memberSubject });
+    const implicit = await app.inject({
+      method: "GET",
+      url: "/admin/users",
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+    const explicit = await app.inject({
+      method: "GET",
+      url: "/admin/users",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        "x-organization-id": autonomiaOrganizationId
+      }
+    });
+    const me = await app.inject({
+      method: "GET",
+      url: "/admin/me",
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+
+    expect(implicit.statusCode).toBe(200);
+    expect(explicit.statusCode).toBe(200);
+    const explicitUserIds = explicit.json().map((user: { id: string }) => user.id);
+    expect(explicitUserIds).toEqual(expect.arrayContaining([adminId, memberId]));
+    expect(explicitUserIds).not.toContain(foreignId);
+    expect(Object.keys(me.json()).sort()).toEqual(["organizations", "permissions", "user"]);
+
+    for (const selector of [
+      hub2youOrganizationId,
+      "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      "not-a-uuid"
+    ]) {
+      const response = await app.inject({
+        method: "GET",
+        url: "/admin/users",
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          "x-organization-id": selector
+        }
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({
+        error: { code: "FORBIDDEN", message: "Organization access is not allowed." }
+      });
+    }
+
+    const memberElevation = await app.inject({
+      method: "PATCH",
+      url: `/admin/users/${memberId}`,
+      headers: {
+        authorization: `Bearer ${memberToken}`,
+        "x-organization-id": autonomiaOrganizationId
+      },
+      payload: { role: "platform_superadmin" }
+    });
+    const tenantProduct = await app.inject({
+      method: "GET",
+      url: "/admin/products",
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        "x-organization-id": autonomiaOrganizationId
+      }
+    });
+    expect(memberElevation.statusCode).toBe(403);
+    expect(tenantProduct.statusCode).toBe(403);
+  });
+
+  it("returns non-enumerable 404 responses for users from another organization", async () => {
+    const actorSubject = "35353535-3535-4353-8353-353535353535";
+    const targetSubject = "36363636-3636-4363-8363-363636363636";
+    const actorId = await provisionUser({
+      identityUserId: actorSubject,
+      email: `foreign-actor${testEmailSuffix}`,
+      name: "Foreign Actor"
+    });
+    const targetId = await provisionUser({
+      identityUserId: targetSubject,
+      email: `foreign-target${testEmailSuffix}`,
+      name: "Foreign Target"
+    });
+    await addMembership({ userId: actorId, organizationId: autonomiaOrganizationId, role: "admin", isPrimary: true });
+    await addMembership({ userId: targetId, organizationId: hub2youOrganizationId, role: "member", isPrimary: true });
+    const token = await signAccessToken({ subject: actorSubject });
+    const headers = {
+      authorization: `Bearer ${token}`,
+      "x-organization-id": autonomiaOrganizationId
+    };
+    const responses = await Promise.all([
+      app.inject({ method: "GET", url: `/admin/users/${targetId}`, headers }),
+      app.inject({ method: "PATCH", url: `/admin/users/${targetId}`, headers, payload: { role: "admin" } }),
+      app.inject({ method: "POST", url: `/admin/users/${targetId}/activate`, headers }),
+      app.inject({ method: "POST", url: `/admin/users/${targetId}/deactivate`, headers }),
+      app.inject({ method: "DELETE", url: `/admin/users/${targetId}`, headers })
+    ]);
+    const persisted = await database.query(
+      `SELECT admin_user.status AS user_status, membership.role, membership.status AS membership_status
+       FROM admin.users admin_user
+       INNER JOIN admin.user_organizations membership ON membership.user_id = admin_user.id
+       WHERE admin_user.id = $1 AND membership.organization_id = $2`,
+      [targetId, hub2youOrganizationId]
+    );
+
+    expect(responses.map((response) => response.statusCode)).toEqual([404, 404, 404, 404, 404]);
+    expect(responses.map((response) => response.json())).toEqual(Array(5).fill({
+      error: { code: "NOT_FOUND", message: "User not found." }
+    }));
+    expect(persisted.rows).toEqual([{ user_status: "active", role: "member", membership_status: "active" }]);
+  });
+
+  it("invites and removes only the selected membership without mutating a shared identity", async () => {
+    const actorSubject = "37373737-3737-4373-8373-373737373737";
+    const sharedSubject = "38383838-3838-4383-8383-383838383838";
+    const actorId = await provisionUser({
+      identityUserId: actorSubject,
+      email: `shared-actor${testEmailSuffix}`,
+      name: "Shared Actor"
+    });
+    const sharedEmail = `shared-user${testEmailSuffix}`;
+    const sharedId = await provisionUser({
+      identityUserId: sharedSubject,
+      email: sharedEmail,
+      name: "Shared Identity"
+    });
+    await addMembership({ userId: actorId, organizationId: autonomiaOrganizationId, role: "admin", isPrimary: true });
+    await addMembership({ userId: sharedId, organizationId: hub2youOrganizationId, role: "member", isPrimary: true });
+    const token = await signAccessToken({ subject: actorSubject });
+    const headers = {
+      authorization: `Bearer ${token}`,
+      "x-organization-id": autonomiaOrganizationId
+    };
+
+    const invitation = await app.inject({
+      method: "POST",
+      url: "/admin/users/invitations",
+      headers,
+      payload: { email: sharedEmail, name: "Must Not Replace", role: "admin" }
+    });
+    const activation = await app.inject({
+      method: "POST",
+      url: `/admin/users/${sharedId}/activate`,
+      headers
+    });
+    const removal = await app.inject({
+      method: "DELETE",
+      url: `/admin/users/${sharedId}`,
+      headers
+    });
+    const persistedUser = await database.query(
+      "SELECT identity_user_id, email, name, status, deleted_at FROM admin.users WHERE id = $1",
+      [sharedId]
+    );
+    const memberships = await database.query(
+      `SELECT organization_id, role, status
+       FROM admin.user_organizations
+       WHERE user_id = $1
+       ORDER BY organization_id`,
+      [sharedId]
+    );
+
+    expect(invitation.statusCode).toBe(201);
+    expect(invitation.json()).toMatchObject({
+      id: sharedId,
+      name: "Shared Identity",
+      organizationRole: "admin",
+      membershipStatus: "inactive"
+    });
+    expect(activation.statusCode).toBe(200);
+    expect(removal.statusCode).toBe(200);
+    expect(persistedUser.rows[0]).toMatchObject({
+      identity_user_id: sharedSubject,
+      email: sharedEmail,
+      name: "Shared Identity",
+      status: "active",
+      deleted_at: null
+    });
+    expect(memberships.rows).toEqual([
+      { organization_id: autonomiaOrganizationId, role: "admin", status: "inactive" },
+      { organization_id: hub2youOrganizationId, role: "member", status: "active" }
+    ]);
+  });
+
+  it("revalidates the actor after a concurrent membership revocation", async () => {
+    const actorSubject = "39393939-3939-4393-8393-393939393939";
+    const actorId = await provisionUser({
+      identityUserId: actorSubject,
+      email: `revoked-actor${testEmailSuffix}`,
+      name: "Revoked Actor"
+    });
+    const targetId = await provisionUser({
+      email: `revoked-target${testEmailSuffix}`,
+      name: "Revoked Target"
+    });
+    await addMembership({ userId: actorId, organizationId: autonomiaOrganizationId, role: "admin", isPrimary: true });
+    await addMembership({ userId: targetId, organizationId: autonomiaOrganizationId, role: "member" });
+    const token = await signAccessToken({ subject: actorSubject });
+    const locker = await database.connect();
+    let transactionOpen = false;
+    let pendingRequest: Promise<Awaited<ReturnType<typeof app.inject>>> | undefined;
+    try {
+      await locker.query("BEGIN");
+      transactionOpen = true;
+      await locker.query(
+        "SELECT pg_advisory_xact_lock(hashtext('admin.organization.membership:' || $1::text))",
+        [autonomiaOrganizationId]
+      );
+      pendingRequest = app.inject({
+        method: "PATCH",
+        url: `/admin/users/${targetId}`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          "x-organization-id": autonomiaOrganizationId
+        },
+        payload: { role: "admin" }
+      });
+      await waitForOrganizationMutationBlocked();
+      await locker.query(
+        `UPDATE admin.user_organizations
+         SET status = 'inactive', is_primary = false, updated_at = now()
+         WHERE user_id = $1 AND organization_id = $2`,
+        [actorId, autonomiaOrganizationId]
+      );
+      await locker.query("COMMIT");
+      transactionOpen = false;
+
+      const response = await pendingRequest;
+      const targetMembership = await database.query(
+        "SELECT role, status FROM admin.user_organizations WHERE user_id = $1 AND organization_id = $2",
+        [targetId, autonomiaOrganizationId]
+      );
+      expect(response.statusCode).toBe(403);
+      expect(targetMembership.rows).toEqual([{ role: "member", status: "active" }]);
+    } finally {
+      if (transactionOpen) await locker.query("ROLLBACK");
+      locker.release();
+      await pendingRequest?.catch(() => undefined);
+    }
+  });
+
+  it("protects self-membership and ignores an unusable backup in the last-admin check", async () => {
+    const platformSubject = "3a3a3a3a-3a3a-43a3-83a3-3a3a3a3a3a3a";
+    const tenantSubject = "3b3b3b3b-3b3b-43b3-83b3-3b3b3b3b3b3b";
+    await provisionUser({
+      identityUserId: platformSubject,
+      email: `last-admin-platform${testEmailSuffix}`,
+      name: "Last Admin Platform"
+    });
+    const tenantAdminId = await provisionUser({
+      identityUserId: tenantSubject,
+      email: `last-admin-tenant${testEmailSuffix}`,
+      name: "Last Tenant Admin"
+    });
+    const unusableBackupId = await provisionUser({
+      email: `last-admin-inactive${testEmailSuffix}`,
+      name: "Inactive Backup",
+      status: "inactive"
+    });
+    await grantPlatformSuperadmin(platformSubject);
+    await addMembership({
+      userId: tenantAdminId,
+      organizationId: hub2youOrganizationId,
+      role: "admin",
+      isPrimary: true
+    });
+    await addMembership({
+      userId: unusableBackupId,
+      organizationId: hub2youOrganizationId,
+      role: "admin"
+    });
+    const [platformToken, tenantToken] = await Promise.all([
+      signAccessToken({ subject: platformSubject }),
+      signAccessToken({ subject: tenantSubject })
+    ]);
+    const platformAttempt = await app.inject({
+      method: "PATCH",
+      url: `/admin/users/${tenantAdminId}`,
+      headers: {
+        authorization: `Bearer ${platformToken}`,
+        "x-organization-id": hub2youOrganizationId
+      },
+      payload: { role: "member" }
+    });
+    const selfAttempt = await app.inject({
+      method: "PATCH",
+      url: `/admin/users/${tenantAdminId}`,
+      headers: {
+        authorization: `Bearer ${tenantToken}`,
+        "x-organization-id": hub2youOrganizationId
+      },
+      payload: { status: "inactive" }
+    });
+    const persisted = await database.query(
+      "SELECT role, status FROM admin.user_organizations WHERE user_id = $1 AND organization_id = $2",
+      [tenantAdminId, hub2youOrganizationId]
+    );
+
+    expect(platformAttempt.statusCode).toBe(409);
+    expect(platformAttempt.json().error.message).toContain("last active organization admin");
+    expect(selfAttempt.statusCode).toBe(409);
+    expect(selfAttempt.json().error.message).toContain("cannot change their own membership");
+    expect(persisted.rows).toEqual([{ role: "admin", status: "active" }]);
+  });
+
+  it("requires an explicit tenant selector for platform access while preserving global routes", async () => {
+    const bootstrapHeaders = await neuroHeaders({
+      subject: platformSuperadminSubject,
+      email: platformSuperadminEmail,
+      name: "Explicit Tenant Superadmin"
+    });
+    expect((await app.inject({ method: "GET", url: "/admin/me", headers: bootstrapHeaders })).statusCode).toBe(200);
+    const token = await signAccessToken({ subject: platformSuperadminSubject });
+    const withoutSelector = await app.inject({
+      method: "GET",
+      url: "/admin/users",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    const withSelector = await app.inject({
+      method: "GET",
+      url: "/admin/users",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-organization-id": hub2youOrganizationId
+      }
+    });
+    const globalProducts = await app.inject({
+      method: "GET",
+      url: "/admin/products",
+      headers: { authorization: `Bearer ${token}` }
+    });
+
+    expect(withoutSelector.statusCode).toBe(403);
+    expect(withSelector.statusCode).toBe(200);
+    expect(globalProducts.statusCode).toBe(200);
+  });
+
   it("accepts the signed Neuro flow only for a previously provisioned administrator", async () => {
     const subject = "11111111-1111-4111-8111-111111111111";
     const email = `neuro${testEmailSuffix}`;
@@ -444,8 +841,11 @@ describe("admin api authentication", () => {
     const response = await app.inject({
       method: "PATCH",
       url: `/admin/users/${targetSubject}`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: {}
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-organization-id": autonomiaOrganizationId
+      },
+      payload: { status: "inactive" }
     });
     const persisted = await database.query(
       `SELECT id
@@ -791,6 +1191,39 @@ async function waitForLinkQueryBlocked(timeoutMs = 2_000) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error("Timed out waiting for the first-link query to block on the concurrent email update.");
+}
+
+async function waitForOrganizationMutationBlocked(timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await database.query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM pg_stat_activity
+         WHERE datname = current_database()
+           AND pid <> pg_backend_pid()
+           AND wait_event_type = 'Lock'
+           AND query LIKE '%admin.organization.membership:%'
+       ) AS blocked`
+    );
+    if (result.rows[0]?.blocked === true) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for the organization membership mutation to block.");
+}
+
+async function addMembership(input: {
+  userId: string;
+  organizationId: string;
+  role: "admin" | "member";
+  isPrimary?: boolean;
+  status?: "active" | "inactive";
+}) {
+  await database.query(
+    `INSERT INTO admin.user_organizations (user_id, organization_id, role, is_primary, status)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [input.userId, input.organizationId, input.role, input.isPrimary ?? false, input.status ?? "active"]
+  );
 }
 
 async function provisionUser(input: {
