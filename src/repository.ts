@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { ADMIN_PERMISSIONS, type AdminOrganization, type AdminPermission, type AdminProduct, type AdminProductCustomization, type AdminProfile, type AdminRole, type AdminService, type AdminUser, type ProductService } from "./types.js";
+import { ADMIN_PERMISSIONS, type AdminOrganization, type AdminOrganizationRole, type AdminOrganizationUser, type AdminPermission, type AdminProduct, type AdminProductCustomization, type AdminProfile, type AdminRole, type AdminService, type AdminStatus, type AdminUser, type ProductService } from "./types.js";
 
 export interface UpsertProductInput {
   key: string;
@@ -51,6 +51,20 @@ export interface UpsertOrganizationInput {
   status?: AdminOrganization["status"] | undefined;
 }
 
+export interface InviteOrganizationUserInput {
+  email: string;
+  name: string;
+  photoUrl?: string | null | undefined;
+  profileId?: string | null | undefined;
+  profileKey?: string | null | undefined;
+  role?: Exclude<AdminOrganizationRole, "platform_superadmin"> | undefined;
+}
+
+export interface UpdateOrganizationMembershipInput {
+  role?: Exclude<AdminOrganizationRole, "platform_superadmin"> | undefined;
+  status?: AdminStatus | undefined;
+}
+
 export interface UpsertRoleInput {
   id?: string | undefined;
   name: string;
@@ -86,6 +100,34 @@ export class ProtectedPlatformSuperadminError extends Error {
   constructor() {
     super("The bootstrapped platform superadmin cannot be deactivated or deleted through generic user routes.");
     this.name = "ProtectedPlatformSuperadminError";
+  }
+}
+
+export class OrganizationAccessError extends Error {
+  constructor() {
+    super("Organization access is not allowed.");
+    this.name = "OrganizationAccessError";
+  }
+}
+
+export class OrganizationUserNotFoundError extends Error {
+  constructor() {
+    super("Organization user was not found.");
+    this.name = "OrganizationUserNotFoundError";
+  }
+}
+
+export class OrganizationUserConflictError extends Error {
+  constructor(message = "Organization user cannot be invited in its current state.") {
+    super(message);
+    this.name = "OrganizationUserConflictError";
+  }
+}
+
+export class LastOrganizationAdminError extends Error {
+  constructor() {
+    super("The last active organization admin cannot be demoted or removed.");
+    this.name = "LastOrganizationAdminError";
   }
 }
 
@@ -381,9 +423,7 @@ export class AdminRepository {
           input.status ?? "active"
         ]
       );
-    const user = await this.getUserById(String(result.rows[0].id));
-    await this.ensureDefaultUserOrganization(user.id);
-    return user;
+    return this.getUserById(String(result.rows[0].id));
   }
 
   async listUserOrganizations(userId: string): Promise<AdminOrganization[]> {
@@ -407,6 +447,313 @@ export class AdminRepository {
     return result.rows.map(mapOrganization);
   }
 
+  async resolveOrganizationAccess(input: {
+    userId: string;
+    organizationId?: string | undefined;
+    allowPlatformAccess: boolean;
+  }): Promise<AdminOrganization | null> {
+    if (input.organizationId) {
+      const result = await this.db.query(
+        `SELECT
+           organization.id,
+           organization.key,
+           organization.name,
+           organization.status,
+           CASE
+             WHEN membership.user_id IS NOT NULL THEN membership.role
+             WHEN $3::boolean THEN 'platform_superadmin'
+             ELSE NULL
+           END AS role,
+           COALESCE(membership.is_primary, false) AS is_primary,
+           CASE
+             WHEN membership.user_id IS NOT NULL THEN membership.status
+             WHEN $3::boolean THEN 'active'
+             ELSE NULL
+           END AS membership_status,
+           COALESCE(membership.created_at, organization.created_at) AS created_at,
+           COALESCE(membership.updated_at, organization.updated_at) AS updated_at
+         FROM admin.organizations organization
+         LEFT JOIN admin.user_organizations membership
+           ON membership.organization_id = organization.id
+          AND membership.user_id = $1
+          AND membership.status = 'active'
+         WHERE organization.id = $2
+           AND organization.status = 'active'
+         LIMIT 1`,
+        [input.userId, input.organizationId, input.allowPlatformAccess]
+      );
+      const row = result.rows[0] as DbOrganizationRow | undefined;
+      if (!row?.role || !row.membership_status) throw new OrganizationAccessError();
+      return mapOrganization(row);
+    }
+
+    const result = await this.db.query(
+      `SELECT
+         organization.id,
+         organization.key,
+         organization.name,
+         organization.status,
+         membership.role,
+         membership.is_primary,
+         membership.status AS membership_status,
+         membership.created_at,
+         membership.updated_at
+       FROM admin.user_organizations membership
+       INNER JOIN admin.organizations organization
+         ON organization.id = membership.organization_id
+        AND organization.status = 'active'
+       WHERE membership.user_id = $1
+         AND membership.status = 'active'
+       ORDER BY membership.is_primary DESC, membership.created_at ASC
+       LIMIT 2`,
+      [input.userId]
+    );
+    if (!result.rows[0]) return null;
+    const primary = result.rows.find((row: DbOrganizationRow) => row.is_primary);
+    if (primary) return mapOrganization(primary as DbOrganizationRow);
+    if (result.rowCount === 1) return mapOrganization(result.rows[0] as DbOrganizationRow);
+    throw new OrganizationAccessError();
+  }
+
+  async listOrganizationUsers(organizationId: string): Promise<AdminOrganizationUser[]> {
+    const result = await this.db.query(
+      organizationUserSelectSql(
+        `WHERE membership.organization_id = $1
+           AND admin_user.deleted_at IS NULL
+         ORDER BY admin_user.email ASC`
+      ),
+      [organizationId]
+    );
+    return result.rows.map((row) => mapOrganizationUser(row as DbOrganizationUserRow));
+  }
+
+  async getOrganizationUser(organizationId: string, userId: string): Promise<AdminOrganizationUser> {
+    const result = await this.db.query(
+      organizationUserSelectSql(
+        `WHERE membership.organization_id = $1
+           AND membership.user_id = $2
+           AND admin_user.deleted_at IS NULL
+         LIMIT 1`
+      ),
+      [organizationId, userId]
+    );
+    if (!result.rows[0]) throw new OrganizationUserNotFoundError();
+    return mapOrganizationUser(result.rows[0] as DbOrganizationUserRow);
+  }
+
+  async inviteOrganizationUser(
+    organizationId: string,
+    actorUserId: string,
+    input: InviteOrganizationUserInput
+  ): Promise<AdminOrganizationUser> {
+    const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey });
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtext('admin.organization.invite:' || lower($1)))",
+        [input.email]
+      );
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtext('admin.organization.membership:' || $1::text))",
+        [organizationId]
+      );
+      await this.assertActiveOrganizationAdmin(client, organizationId, actorUserId);
+      const protectedUser = await client.query(
+        `SELECT 1
+         FROM admin.platform_role_bootstrap bootstrap
+         INNER JOIN admin.users admin_user ON admin_user.id = bootstrap.user_id
+         WHERE bootstrap.bootstrap_key = 'platform_superadmin'
+           AND lower(admin_user.email) = lower($1)
+         LIMIT 1`,
+        [input.email]
+      );
+      if (protectedUser.rows[0]) throw new ProtectedPlatformSuperadminError();
+
+      const existing = await client.query(
+        `SELECT id, status, deleted_at
+         FROM admin.users
+         WHERE lower(email) = lower($1)
+         FOR UPDATE`,
+        [input.email]
+      );
+      if (existing.rowCount && existing.rowCount !== 1) {
+        throw new OrganizationUserConflictError("Email matches more than one administrative identity.");
+      }
+      let userId: string;
+      if (existing.rows[0]) {
+        const user = existing.rows[0] as { id: string; status: AdminUser["status"]; deleted_at: Date | null };
+        if (user.status === "inactive" || user.deleted_at) throw new OrganizationUserConflictError();
+        userId = user.id;
+      } else {
+        const created = await client.query(
+          `INSERT INTO admin.users (email, name, photo_url, profile_id, status)
+           VALUES ($1, $2, $3, $4, 'invited')
+           RETURNING id`,
+          [input.email, input.name, input.photoUrl ?? null, profile.id]
+        );
+        userId = String(created.rows[0].id);
+      }
+
+      await client.query(
+        `INSERT INTO admin.user_organizations (
+           user_id, organization_id, role, is_primary, status
+         ) VALUES (
+           $1,
+           $2,
+           $3,
+           false,
+           'inactive'
+         )
+         ON CONFLICT (user_id, organization_id) DO NOTHING`,
+        [userId, organizationId, input.role ?? "member"]
+      );
+      await client.query("COMMIT");
+      return this.getOrganizationUser(organizationId, userId);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if (isUniqueViolation(error)) throw new OrganizationUserConflictError();
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateOrganizationUserMembership(
+    organizationId: string,
+    userId: string,
+    actorUserId: string,
+    input: UpdateOrganizationMembershipInput
+  ): Promise<AdminOrganizationUser> {
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtext('admin.organization.membership:' || $1::text))",
+        [organizationId]
+      );
+      await this.assertActiveOrganizationAdmin(client, organizationId, actorUserId);
+      if (actorUserId === userId) {
+        throw new OrganizationUserConflictError("Organization admins cannot change their own membership through generic user routes.");
+      }
+      const currentResult = await client.query(
+        `SELECT role, status
+         FROM admin.user_organizations
+         WHERE organization_id = $1
+           AND user_id = $2
+         FOR UPDATE`,
+        [organizationId, userId]
+      );
+      const current = currentResult.rows[0] as {
+        role: Exclude<AdminOrganizationRole, "platform_superadmin">;
+        status: AdminStatus;
+      } | undefined;
+      if (!current) throw new OrganizationUserNotFoundError();
+      const nextRole = input.role ?? current.role;
+      const nextStatus = input.status ?? current.status;
+      if (current.role === "admin" && current.status === "active" && (nextRole !== "admin" || nextStatus !== "active")) {
+        const otherAdmins = await client.query(
+          `SELECT 1
+           FROM admin.user_organizations other_membership
+           INNER JOIN admin.users other_admin
+             ON other_admin.id = other_membership.user_id
+            AND other_admin.status = 'active'
+            AND other_admin.deleted_at IS NULL
+           WHERE other_membership.organization_id = $1
+             AND other_membership.user_id <> $2
+             AND other_membership.role = 'admin'
+             AND other_membership.status = 'active'
+           LIMIT 1
+           FOR UPDATE`,
+          [organizationId, userId]
+        );
+        if (!otherAdmins.rows[0]) throw new LastOrganizationAdminError();
+      }
+      await client.query(
+        `UPDATE admin.user_organizations
+         SET role = $3,
+             status = $4,
+             is_primary = CASE
+               WHEN $4 = 'inactive' THEN false
+               WHEN EXISTS (
+                 SELECT 1
+                 FROM admin.user_organizations other_primary
+                 WHERE other_primary.user_id = $2
+                   AND other_primary.organization_id <> $1
+                   AND other_primary.is_primary = true
+                   AND other_primary.status = 'active'
+               ) THEN admin.user_organizations.is_primary
+               ELSE true
+             END,
+             updated_at = now()
+         WHERE organization_id = $1
+           AND user_id = $2`,
+        [organizationId, userId, nextRole, nextStatus]
+      );
+      if (current.status === "inactive" && nextStatus === "active") {
+        await client.query(
+          `UPDATE admin.users
+           SET status = 'active', updated_at = now()
+           WHERE id = $1
+             AND status = 'invited'
+             AND deleted_at IS NULL`,
+          [userId]
+        );
+      }
+      await client.query("COMMIT");
+      return this.getOrganizationUser(organizationId, userId);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async assertActiveOrganizationAdmin(
+    queryable: Pick<Pool, "query">,
+    organizationId: string,
+    actorUserId: string
+  ) {
+    const result = await queryable.query(
+      `SELECT 1
+       WHERE EXISTS (
+         SELECT 1
+         FROM admin.organizations organization
+         WHERE organization.id = $1
+           AND organization.status = 'active'
+       )
+         AND EXISTS (
+           SELECT 1
+           FROM admin.users admin_user
+           WHERE admin_user.id = $2
+             AND admin_user.status = 'active'
+             AND admin_user.deleted_at IS NULL
+             AND (
+               EXISTS (
+                 SELECT 1
+                 FROM admin.user_organizations membership
+                 WHERE membership.organization_id = $1
+                   AND membership.user_id = admin_user.id
+                   AND membership.role = 'admin'
+                   AND membership.status = 'active'
+               )
+               OR EXISTS (
+                 SELECT 1
+                 FROM admin.user_roles user_role
+                 INNER JOIN admin.roles role ON role.id = user_role.role_id
+                 WHERE user_role.user_id = admin_user.id
+                   AND role.status = 'active'
+                   AND 'admin.users.write' = ANY(role.permissions)
+               )
+             )
+         )
+       LIMIT 1`,
+      [organizationId, actorUserId]
+    );
+    if (!result.rows[0]) throw new OrganizationAccessError();
+  }
+
   async listOrganizations(): Promise<AdminOrganization[]> {
     const result = await this.db.query(
       `SELECT id, key, name, status, created_at, updated_at
@@ -428,30 +775,6 @@ export class AdminRepository {
       [input.id ?? null, input.key, input.name, input.status ?? "active"]
     );
     return mapOrganization(result.rows[0] as DbOrganizationRow);
-  }
-
-  private async ensureDefaultUserOrganization(userId: string) {
-    await this.db.query(
-      `WITH has_primary AS (
-         SELECT EXISTS (
-           SELECT 1
-           FROM admin.user_organizations
-           WHERE user_id = $1
-             AND is_primary = true
-             AND status = 'active'
-         ) AS value
-       )
-       INSERT INTO admin.user_organizations (user_id, organization_id, role, is_primary, status)
-       SELECT $1, o.id, 'admin', NOT hp.value, 'active'
-       FROM admin.organizations o
-       CROSS JOIN has_primary hp
-       WHERE o.key = 'autonomia'
-       ON CONFLICT (user_id, organization_id) DO UPDATE SET
-         is_primary = admin.user_organizations.is_primary OR EXCLUDED.is_primary,
-         status = 'active',
-         updated_at = now()`,
-      [userId]
-    );
   }
 
   async getUserById(userId: string) {
@@ -843,6 +1166,28 @@ function userSelectSql(suffix: string) {
     ${suffix}`;
 }
 
+function organizationUserSelectSql(suffix: string) {
+  return `SELECT
+      admin_user.id,
+      admin_user.email,
+      admin_user.name,
+      admin_user.photo_url,
+      admin_user.status,
+      admin_user.created_at,
+      admin_user.updated_at,
+      profile.id AS profile_id,
+      profile.key AS profile_key,
+      profile.name AS profile_name,
+      membership.role AS organization_role,
+      membership.status AS membership_status,
+      membership.is_primary,
+      membership.updated_at AS membership_updated_at
+    FROM admin.user_organizations membership
+    INNER JOIN admin.users admin_user ON admin_user.id = membership.user_id
+    LEFT JOIN admin.profiles profile ON profile.id = admin_user.profile_id
+    ${suffix}`;
+}
+
 function mapUser(row: DbUserRow): AdminUser {
   return {
     id: row.id,
@@ -855,6 +1200,16 @@ function mapUser(row: DbUserRow): AdminUser {
     profileName: row.profile_name,
     createdAt: toIso(row.created_at),
     updatedAt: toIso(row.updated_at)
+  };
+}
+
+function mapOrganizationUser(row: DbOrganizationUserRow): AdminOrganizationUser {
+  return {
+    ...mapUser(row),
+    organizationRole: row.organization_role,
+    membershipStatus: row.membership_status,
+    isPrimary: row.is_primary,
+    membershipUpdatedAt: toIso(row.membership_updated_at)
   };
 }
 
@@ -983,6 +1338,13 @@ interface DbUserRow {
   updated_at: Date | string;
 }
 
+interface DbOrganizationUserRow extends DbUserRow {
+  organization_role: Exclude<AdminOrganizationRole, "platform_superadmin">;
+  membership_status: AdminStatus;
+  is_primary: boolean;
+  membership_updated_at: Date | string;
+}
+
 interface DbProfileRow {
   id: string;
   key: string;
@@ -998,7 +1360,7 @@ interface DbOrganizationRow {
   key: string;
   name: string;
   status: AdminOrganization["status"];
-  role?: string;
+  role?: AdminOrganizationRole;
   is_primary?: boolean;
   membership_status?: AdminOrganization["membershipStatus"];
   created_at: Date | string;

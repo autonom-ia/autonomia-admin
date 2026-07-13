@@ -8,22 +8,24 @@ controles produtivos ainda não certificados.
 | Indicador | Status | Última verificação |
 |-----------|:------:|--------------------|
 | Build | verde local; package stage ci verde | 2026-07-13 |
-| Testes | 55/55, zero skips, com PostgreSQL local real e JWKS RSA; trigger do superadmin provado diretamente e em corrida | 2026-07-13 |
-| CI | Draft PR #12 aberta sobre a #11; CI remoto verde | 2026-07-13 |
+| Testes | 66/66, zero skips, com PostgreSQL/JWKS reais e matriz de duas organizações | 2026-07-13 |
+| CI | RBAC na Draft PR #12 verde; escopo organizacional local verde, CI remoto pendente | 2026-07-13 |
 | Deploy produção | workflow hard-disabled; review final P0-P3=0 | 2026-07-13 |
 | Harness instalado | 2.1.2 local nesta branch | 2026-07-13 |
 | Harness drift | base 2.1.2 + overrides restritivos e secret-scan estrito | 2026-07-13 |
 
 ## Estado atual
 
-Esta branch consolida o JWT fail-closed da PR #6 sobre o deploy-gate da PR #11
-e ativa RBAC global da Issue #3 somente em Local/CI. A `main` continua sem essas
-mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
+Esta branch implementa a Issue #4 sobre a Draft PR #12: diretório de usuários
+tenant-scoped por `X-Organization-Id`, membership admin/member e respostas não
+enumeráveis. A `main` continua sem essas mudanças; nenhum deploy, RDS, secret
+ou dado de cliente foi tocado.
 
 ## Última mudança relevante
 
-- O RBAC da Issue #3 recebeu review crítico final GREEN, P0=P1=P2=P3=0, e foi
-  publicado na Draft PR #12 empilhada na #11, sem merge/deploy.
+- Rotas de usuários não chamam mais mutações globais: invite/activate/
+  deactivate/delete operam somente a membership selecionada e revalidam o ator
+  dentro da transação.
 
 ## O que está funcionando
 
@@ -35,8 +37,7 @@ mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
 - A `main` continua em Harness 2.0.2 até as PRs empilhadas serem aprovadas.
 - Push em `main` ainda dispara migration e deploy; a correção da Issue #8 está
   somente na Draft PR #11 e no hardening local aprovado, ainda sem merge.
-- Isolamento por organização continua na Issue #4. Outbox/reconciliação do
-  cadastro corporativo AppSell continua na Issue #7.
+- Outbox/reconciliação do cadastro corporativo AppSell continua na Issue #7.
 
 ## Bloqueios
 
@@ -45,10 +46,9 @@ mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
 
 ## Próxima ação
 
-Manter a Draft PR #12 sem merge/deploy e seguir para o isolamento por
-organização da Issue #4 em slice própria. O closure de hashes e fixtures do
-deploy-gate foi atualizado sem relaxar o hard-disable. A Issue #8 permanece
-aberta para release por SHA, Environment, migration, smoke e rollback.
+Abrir Draft PR da Issue #4 empilhada na #12 e validar CI remoto, sem
+merge/deploy. O review adversarial final está GREEN, P0=P1=P2=P3=0. A Issue #8 permanece aberta para
+release por SHA, Environment, migration, smoke e rollback.
 
 Validação local: gate antes do install com 31 fixtures físicas; allowlists
 exatas de workflows, package/lock, Serverless, hooks/settings, `scripts/**`,
