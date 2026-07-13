@@ -34,22 +34,22 @@ Project status:
 
 <!-- Substituir abaixo a cada nova sessão. Sessões anteriores vão para PROGRESS.md. -->
 
-## Sessão: [pendente]
-Issue: 
-Branch: 
-PR: 
-Estado: 
-Modelo: 
-Arquivos alterados: 
-Comandos executados: 
-Validação: 
+## Sessão: 2026-07-13 12:33 — atualizar Harness para 2.1.2
+Issue: #9
+Branch: docs/update-agent-harness-v1
+PR: não aberta
+Estado: em_progresso
+Modelo: strong + human
+Arquivos alterados: manifestos, blocos marcados em AGENTS/CLAUDE, STATUS e memória
+Comandos executados: diagnóstico; apply-harness-to-repo; install frozen; lint; test; build; validate-harness; doctor; diff review
+Validação: primeiro review RED P1=1/P2=1/P3=1 por permissões contraditórias, workflow 2.0.2 e import duplicado; segundo/terceiro reviews encontraram bypasses no filtro upstream 2.1.2; Issue agent-harness#14 criada e filtro removido, preservando scan estrito 2.0.2; lint/build verdes; testes 3/3 ignorados sem banco; Harness estrutural 0/0; novo review pendente
 Bloqueios: nenhum
-Próxima ação: 
+Próxima ação: validar Harness, testes/build e review crítico; abrir Draft PR empilhada sobre #5
 Project status:
-  - Projeto: 
-  - Status: 
-  - Tipo: 
-  - Prioridade: 
-  - Risco: 
-  - Ambiente: 
-  - Próxima ação:
+  - Projeto: Infra
+  - Status: Em desenvolvimento
+  - Tipo: Infra
+  - Prioridade: P1
+  - Risco: Baixo
+  - Ambiente: Dev
+  - Próxima ação: revisar atualização do Harness 2.1.2 sem merge

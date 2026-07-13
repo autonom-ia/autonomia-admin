@@ -1,4 +1,21 @@
+<!-- AUTONOMIA_AGENT_HARNESS_START -->
 @AGENTS.md
+
+## Autonom.ia Agent Harness
+
+Este projeto usa o Autonom.ia Agent Harness.
+
+Fonte oficial:
+`https://github.com/autonom-ia/agent-harness`
+
+Project:
+`https://github.com/users/autonom-ia/projects/3`
+
+Regras:
+- Preservar regras específicas deste projeto.
+- Em caso de conflito entre regra local e harness, pedir decisão ao Rodrigo.
+- As regras locais mais restritivas de `AGENTS.md` e `.claude/rules/prod-approval.md` prevalecem. Esta atualização não amplia permissões de produção, banco ou merge.
+<!-- AUTONOMIA_AGENT_HARNESS_END -->
 
 # CLAUDE.md
 
