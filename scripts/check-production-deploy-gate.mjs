@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedWorkflowHashes = {
   "agent-harness-check.yml": "54da44abc1601840331ef13bc9d8be77e6f9b535c0814393407294fc811e1287",
-  "ci.yml": "061b239a611b1008f29eb33d4e6094597bb0dd859a2e06e364c9090e4ca51c44",
+  "ci.yml": "f33124072e327b65101cd2d47780e0bd7b2eb1a4abedc2f8ab026addf39f6c1e",
   "deploy-prod.yml": "4a460c0836d7cc3238f74fdb30992e291cc2fe25f53128be4a44c2f4e8c94042"
 };
 const expectedControlFileHashes = {

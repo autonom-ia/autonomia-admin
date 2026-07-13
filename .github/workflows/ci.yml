@@ -9,21 +9,7 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d autonomia_admin_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
@@ -41,6 +27,17 @@ jobs:
       - run: node scripts/check-production-deploy-gate.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - name: Start runner-local PostgreSQL 16
+        run: |
+          set -euo pipefail
+          sudo systemctl start postgresql.service
+          server_version_num="$(sudo -u postgres psql -Atqc 'SHOW server_version_num')"
+          case "$server_version_num" in
+            16????) ;;
+            *) echo "Expected PostgreSQL 16, got server_version_num=$server_version_num" >&2; exit 1 ;;
+          esac
+          sudo -u postgres psql -v ON_ERROR_STOP=1 \
+            -c "ALTER USER postgres PASSWORD 'postgres'"
       - name: Create attested disposable Admin database
         env:
           PGPASSWORD: postgres
