@@ -1,14 +1,25 @@
 {
   "name": "Autonom.ia Agent Harness",
-  "version": "2.0.2",
+  "version": "2.1.2",
   "layers": {
-    "core": "2.0.2",
-    "capabilities": "2.0.2",
-    "infra": "2.0.2",
-    "observatory": "2.0.2"
+    "core": "2.1.2",
+    "capabilities": "2.1.2",
+    "infra": "2.1.2",
+    "observatory": "2.1.2"
   },
   "platforms_installed": ["claude-code", "codex", "cursor"],
   "enforcement_mode": "warn",
+  "local_overrides": {
+    "rules": [
+      ".claude/rules/environment.md",
+      ".claude/rules/git.md",
+      ".claude/rules/prod-approval.md"
+    ],
+    "workflows": [
+      ".github/workflows/agent-harness-check.yml"
+    ],
+    "policy": "As regras locais 2.0.2 mais restritivas são preservadas intencionalmente e prevalecem sobre permissões mais amplas da baseline 2.1.2. O workflow integra o comportamento seguro da 2.1.2 para artifacts ausentes, mas preserva o secret-scan estrito 2.0.2 até a correção da Issue agent-harness#14."
+  },
   "on_degraded": {
     "layer_core": "WARN_CI",
     "layer_capabilities": "WARN_CI",
@@ -17,7 +28,7 @@
   },
   "source": "https://github.com/autonom-ia/agent-harness",
   "project_url": "https://github.com/users/autonom-ia/projects/3",
-  "installed_at": "2026-07-10T12:26:31Z",
-  "last_assessment_at": "2026-07-10T12:26:31Z",
-  "drift_check_due": "2026-08-09T12:26:31Z"
+  "installed_at": "2026-07-13T11:33:16Z",
+  "last_assessment_at": "2026-07-13T11:33:16Z",
+  "drift_check_due": "2026-08-12T11:33:16Z"
 }
