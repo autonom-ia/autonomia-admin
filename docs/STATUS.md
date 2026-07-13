@@ -8,23 +8,22 @@ controles produtivos ainda não certificados.
 | Indicador | Status | Última verificação |
 |-----------|:------:|--------------------|
 | Build | verde local; package stage ci verde | 2026-07-13 |
-| Testes | 28/28 com PostgreSQL local real | 2026-07-13 |
-| CI | hardening local aprovado; CI remoto do novo SHA pendente | 2026-07-13 |
+| Testes | 55/55, zero skips, com PostgreSQL local real e JWKS RSA; trigger do superadmin provado diretamente e em corrida | 2026-07-13 |
+| CI | Draft PR #12 aberta sobre a #11; CI remoto verde | 2026-07-13 |
 | Deploy produção | workflow hard-disabled; review final P0-P3=0 | 2026-07-13 |
 | Harness instalado | 2.1.2 local nesta branch | 2026-07-13 |
 | Harness drift | base 2.1.2 + overrides restritivos e secret-scan estrito | 2026-07-13 |
 
 ## Estado atual
 
-O serviço Admin possui Draft PRs separadas para Harness (#5/#10) e autenticação
-fail-closed (#6). A `main` ainda dispara migration e deploy produtivos em push.
-Esta branch da Issue #8 remove o caminho automático, sem tocar produção.
+Esta branch consolida o JWT fail-closed da PR #6 sobre o deploy-gate da PR #11
+e ativa RBAC global da Issue #3 somente em Local/CI. A `main` continua sem essas
+mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
 
 ## Última mudança relevante
 
-- O GREEN anterior da Draft PR #11 foi invalidado por um achado cross-repo: o
-  checker não cobria hooks, scripts físicos, configs do package manager e
-  plugins Serverless. O hardening está local e ainda não foi publicado.
+- O RBAC da Issue #3 recebeu review crítico final GREEN, P0=P1=P2=P3=0, e foi
+  publicado na Draft PR #12 empilhada na #11, sem merge/deploy.
 
 ## O que está funcionando
 
@@ -36,7 +35,8 @@ Esta branch da Issue #8 remove o caminho automático, sem tocar produção.
 - A `main` continua em Harness 2.0.2 até as PRs empilhadas serem aprovadas.
 - Push em `main` ainda dispara migration e deploy; a correção da Issue #8 está
   somente na Draft PR #11 e no hardening local aprovado, ainda sem merge.
-- Auth, RBAC e isolamento por organização continuam em Issues #2, #3 e #4.
+- Isolamento por organização continua na Issue #4. Outbox/reconciliação do
+  cadastro corporativo AppSell continua na Issue #7.
 
 ## Bloqueios
 
@@ -45,9 +45,10 @@ Esta branch da Issue #8 remove o caminho automático, sem tocar produção.
 
 ## Próxima ação
 
-Commitar/pushar o hardening aprovado na Draft PR #11 e validar o CI remoto, sem
-merge/deploy. A Issue #8
-permanece aberta para release por SHA, Environment, migration, smoke e rollback.
+Manter a Draft PR #12 sem merge/deploy e seguir para o isolamento por
+organização da Issue #4 em slice própria. O closure de hashes e fixtures do
+deploy-gate foi atualizado sem relaxar o hard-disable. A Issue #8 permanece
+aberta para release por SHA, Environment, migration, smoke e rollback.
 
 Validação local: gate antes do install com 31 fixtures físicas; allowlists
 exatas de workflows, package/lock, Serverless, hooks/settings, `scripts/**`,

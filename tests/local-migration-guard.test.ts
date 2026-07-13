@@ -26,7 +26,8 @@ describe("local migration guard", () => {
       "007_add_product_background_auth.sql",
       "009_add_product_registration_urls.sql",
       "010_configure_neuroai_registration_callback.sql",
-      "011_add_user_soft_delete.sql"
+      "011_add_user_soft_delete.sql",
+      "012_add_platform_superadmin_rbac.sql"
     ]);
   });
 

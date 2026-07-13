@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import type { AdminOrganization, AdminProduct, AdminProductCustomization, AdminProfile, AdminRole, AdminService, AdminUser, ProductService } from "./types.js";
+import { ADMIN_PERMISSIONS, type AdminOrganization, type AdminPermission, type AdminProduct, type AdminProductCustomization, type AdminProfile, type AdminRole, type AdminService, type AdminUser, type ProductService } from "./types.js";
 
 export interface UpsertProductInput {
   key: string;
@@ -35,7 +35,7 @@ export interface UpsertServiceInput {
 }
 
 export interface UpsertUserInput {
-  id?: string | undefined;
+  adminUserId?: string | undefined;
   email: string;
   name: string;
   photoUrl?: string | null | undefined;
@@ -73,6 +73,20 @@ export interface UpsertProductCustomizationInput {
   themeTokens?: Record<string, unknown> | undefined;
   customCss?: Record<string, unknown> | undefined;
   status?: AdminProductCustomization["status"] | undefined;
+}
+
+export class AdminUserAccessError extends Error {
+  constructor(message = "Administrative user is not active.") {
+    super(message);
+    this.name = "AdminUserAccessError";
+  }
+}
+
+export class ProtectedPlatformSuperadminError extends Error {
+  constructor() {
+    super("The bootstrapped platform superadmin cannot be deactivated or deleted through generic user routes.");
+    this.name = "ProtectedPlatformSuperadminError";
+  }
 }
 
 export class AdminRepository {
@@ -116,49 +130,257 @@ export class AdminRepository {
     return result.rows.map(mapUser);
   }
 
-  async ensureUser(input: Pick<AdminUser, "email" | "name"> & { id?: string | undefined; photoUrl?: string | null | undefined }) {
-    const profile = await this.getDefaultProfile();
-    const result = await this.db.query(
-      `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-       VALUES ($1, $2, $3, $4, $5, 'active')
-       ON CONFLICT (email) DO UPDATE SET
-         name = COALESCE(EXCLUDED.name, admin.users.name),
-         photo_url = COALESCE(EXCLUDED.photo_url, admin.users.photo_url),
-         profile_id = COALESCE(admin.users.profile_id, EXCLUDED.profile_id),
-         status = 'active',
-         deleted_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [toUuidOrNull(input.id), input.email, input.name, input.photoUrl ?? null, profile.id]
+  async authenticateProvisionedUser(input: {
+    identityUserId: string;
+    verifiedEmail?: string | undefined;
+    verifiedName?: string | undefined;
+    allowFirstLink?: boolean | undefined;
+  }) {
+    const identityUserId = toUuidOrNull(input.identityUserId);
+    if (!identityUserId) throw new AdminUserAccessError();
+
+    const linked = await this.db.query(
+      `SELECT id, status, deleted_at
+       FROM admin.users
+       WHERE identity_user_id = $1
+       LIMIT 1`,
+      [identityUserId]
     );
-    const user = await this.getUserById(String(result.rows[0].id));
-    await this.ensureDefaultUserOrganization(user.id);
-    return user;
+    if (linked.rows[0]) {
+      const row = linked.rows[0] as { id: string; status: AdminUser["status"]; deleted_at: Date | null };
+      if (row.status !== "active" || row.deleted_at) throw new AdminUserAccessError();
+      return this.getUserById(row.id);
+    }
+
+    if (!input.allowFirstLink || !input.verifiedEmail) throw new AdminUserAccessError();
+    let result;
+    try {
+      result = await this.db.query(
+        `WITH candidates AS MATERIALIZED (
+           SELECT id
+           FROM admin.users
+           WHERE lower(email) = lower($1)
+             AND identity_user_id IS NULL
+             AND status = 'active'
+             AND deleted_at IS NULL
+           FOR UPDATE
+         ),
+         eligible AS (
+           SELECT id
+           FROM candidates
+           WHERE (SELECT count(*) FROM candidates) = 1
+         )
+         UPDATE admin.users AS users
+         SET identity_user_id = $2,
+             name = COALESCE($3, users.name),
+             updated_at = now()
+         FROM eligible
+         WHERE users.id = eligible.id
+           AND lower(users.email) = lower($1)
+           AND users.identity_user_id IS NULL
+           AND users.status = 'active'
+           AND users.deleted_at IS NULL
+         RETURNING users.id`,
+        [input.verifiedEmail, identityUserId, input.verifiedName ?? null]
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new AdminUserAccessError("Identity is already linked to another administrative user.");
+      throw error;
+    }
+    if (!result.rows[0]) throw new AdminUserAccessError();
+    return this.getUserById(String(result.rows[0].id));
+  }
+
+  async listUserPermissions(userId: string): Promise<AdminPermission[]> {
+    const result = await this.db.query(
+      `SELECT DISTINCT unnest(role.permissions) AS permission
+       FROM admin.user_roles user_role
+       INNER JOIN admin.roles role ON role.id = user_role.role_id
+       INNER JOIN admin.users admin_user ON admin_user.id = user_role.user_id
+       WHERE user_role.user_id = $1
+         AND role.status = 'active'
+         AND admin_user.status = 'active'
+         AND admin_user.deleted_at IS NULL
+       ORDER BY permission ASC`,
+      [userId]
+    );
+    const allowed = new Set<string>(ADMIN_PERMISSIONS);
+    return result.rows
+      .map((row: { permission: string }) => row.permission)
+      .filter((permission: string): permission is AdminPermission => allowed.has(permission));
+  }
+
+  async bootstrapPlatformSuperadmin(input: {
+    identityUserId: string;
+    verifiedEmail?: string | undefined;
+    verifiedName?: string | undefined;
+    expectedEmail: string;
+  }) {
+    const identityUserId = toUuidOrNull(input.identityUserId);
+    if (!identityUserId) throw new AdminUserAccessError("Platform superadmin subject is invalid.");
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('admin.platform_superadmin.bootstrap'))");
+      const existing = await client.query(
+        `SELECT bootstrap.user_id, bootstrap.identity_sub, admin_user.status, admin_user.deleted_at
+         FROM admin.platform_role_bootstrap bootstrap
+         INNER JOIN admin.users admin_user ON admin_user.id = bootstrap.user_id
+         WHERE bootstrap.bootstrap_key = 'platform_superadmin'
+         LIMIT 1`
+      );
+      if (existing.rows[0]) {
+        const row = existing.rows[0] as {
+          user_id: string;
+          identity_sub: string;
+          status: AdminUser["status"];
+          deleted_at: Date | null;
+        };
+        if (row.identity_sub !== identityUserId) {
+          throw new AdminUserAccessError("Platform superadmin bootstrap is already bound.");
+        }
+        if (row.status !== "active" || row.deleted_at) throw new AdminUserAccessError();
+        await client.query("COMMIT");
+        return this.getUserById(row.user_id);
+      }
+
+      if (!input.verifiedEmail || input.verifiedEmail.toLowerCase() !== input.expectedEmail.toLowerCase()) {
+        throw new AdminUserAccessError("Verified platform superadmin email is required for first bootstrap.");
+      }
+      const candidates = await client.query(
+        `SELECT id, identity_user_id, email, status, deleted_at
+         FROM admin.users
+         WHERE identity_user_id = $1
+            OR lower(email) = lower($2)
+         FOR UPDATE`,
+        [identityUserId, input.expectedEmail]
+      );
+      if (candidates.rowCount && candidates.rowCount !== 1) {
+        throw new AdminUserAccessError("Platform superadmin identity conflicts with an existing user.");
+      }
+      let userId: string;
+      if (candidates.rows[0]) {
+        const candidate = candidates.rows[0] as {
+          id: string;
+          identity_user_id: string | null;
+          email: string;
+          status: AdminUser["status"];
+          deleted_at: Date | null;
+        };
+        if (
+          candidate.status !== "active"
+          || candidate.deleted_at
+          || candidate.email.toLowerCase() !== input.expectedEmail.toLowerCase()
+          || (candidate.identity_user_id && candidate.identity_user_id !== identityUserId)
+        ) {
+          throw new AdminUserAccessError("Platform superadmin candidate is not eligible.");
+        }
+        const linked = await client.query(
+          `UPDATE admin.users
+           SET identity_user_id = $2,
+               name = COALESCE($3, name),
+               updated_at = now()
+           WHERE id = $1
+             AND (identity_user_id IS NULL OR identity_user_id = $2)
+           RETURNING id`,
+          [candidate.id, identityUserId, input.verifiedName ?? null]
+        );
+        if (!linked.rows[0]) throw new AdminUserAccessError("Platform superadmin identity could not be linked.");
+        userId = String(linked.rows[0].id);
+      } else {
+        const created = await client.query(
+          `INSERT INTO admin.users (identity_user_id, email, name, profile_id, status)
+           VALUES (
+             $1,
+             $2,
+             $3,
+             (SELECT id FROM admin.profiles WHERE key = 'autonomia_master' AND status = 'active'),
+             'active'
+           )
+           RETURNING id`,
+          [identityUserId, input.expectedEmail, input.verifiedName ?? "Autonom.ia Superadmin"]
+        );
+        if (!created.rows[0]) throw new Error("Platform superadmin user could not be created.");
+        userId = String(created.rows[0].id);
+      }
+
+      const role = await client.query(
+        `SELECT id
+         FROM admin.roles
+         WHERE key = 'platform_superadmin'
+           AND status = 'active'
+         LIMIT 1`
+      );
+      if (!role.rows[0]) throw new Error("platform_superadmin role was not seeded.");
+      const roleId = String(role.rows[0].id);
+      await client.query(
+        `INSERT INTO admin.user_roles (user_id, role_id)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id, role_id) DO NOTHING`,
+        [userId, roleId]
+      );
+      await client.query(
+        `INSERT INTO admin.platform_role_bootstrap (
+           bootstrap_key, user_id, role_id, identity_sub, email_at_bootstrap
+         ) VALUES ('platform_superadmin', $1, $2, $3, $4)`,
+        [userId, roleId, identityUserId, input.verifiedEmail.toLowerCase()]
+      );
+      await client.query("COMMIT");
+      return this.getUserById(userId);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async upsertUser(input: UpsertUserInput) {
+    await this.assertProtectedUserMutationAllowed(input);
     const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey });
-    const existing = input.id ? await this.getUserById(input.id).catch(() => null) : null;
-    const result = await this.db.query(
-      `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO UPDATE SET
-         name = EXCLUDED.name,
-         photo_url = EXCLUDED.photo_url,
-         profile_id = EXCLUDED.profile_id,
-         status = EXCLUDED.status,
-         deleted_at = NULL,
-         updated_at = now()
-       RETURNING id`,
-      [
-        toUuidOrNull(existing?.id ?? input.id),
-        input.email,
-        input.name,
-        input.photoUrl ?? existing?.photoUrl ?? null,
-        profile.id,
-        input.status ?? existing?.status ?? "active"
-      ]
-    );
+    const existing = input.adminUserId ? await this.getUserById(input.adminUserId).catch(() => null) : null;
+    if (input.adminUserId && !existing) throw new Error("User not found.");
+
+    const result = existing
+      ? await this.db.query(
+        `UPDATE admin.users
+         SET email = $2,
+             name = $3,
+             photo_url = $4,
+             profile_id = $5,
+             status = $6,
+             deleted_at = NULL,
+             updated_at = now()
+         WHERE id = $1
+         RETURNING id`,
+        [
+          existing.id,
+          input.email,
+          input.name,
+          input.photoUrl ?? existing.photoUrl ?? null,
+          profile.id,
+          input.status ?? existing.status
+        ]
+      )
+      : await this.db.query(
+        `INSERT INTO admin.users (email, name, photo_url, profile_id, status)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (email) DO UPDATE SET
+           name = EXCLUDED.name,
+           photo_url = EXCLUDED.photo_url,
+           profile_id = EXCLUDED.profile_id,
+           status = EXCLUDED.status,
+           deleted_at = NULL,
+           updated_at = now()
+         RETURNING id`,
+        [
+          input.email,
+          input.name,
+          input.photoUrl ?? null,
+          profile.id,
+          input.status ?? "active"
+        ]
+      );
     const user = await this.getUserById(String(result.rows[0].id));
     await this.ensureDefaultUserOrganization(user.id);
     return user;
@@ -252,6 +474,7 @@ export class AdminRepository {
   }
 
   async updateUserStatus(userId: string, status: AdminUser["status"]) {
+    if (status !== "active") await this.assertNotBootstrappedPlatformSuperadmin(userId);
     const result = await this.db.query(
       `UPDATE admin.users
        SET status = $2, updated_at = now()
@@ -267,6 +490,7 @@ export class AdminRepository {
     const client = await this.db.connect();
     try {
       await client.query("BEGIN");
+      await this.assertNotBootstrappedPlatformSuperadmin(userId, client);
       const userResult = await client.query(
         `UPDATE admin.users
          SET status = 'inactive', deleted_at = now(), updated_at = now()
@@ -316,6 +540,45 @@ export class AdminRepository {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  private async assertNotBootstrappedPlatformSuperadmin(
+    userId: string,
+    queryable: Pick<Pool, "query"> = this.db
+  ) {
+    const result = await queryable.query(
+      `SELECT 1
+       FROM admin.platform_role_bootstrap
+       WHERE bootstrap_key = 'platform_superadmin'
+         AND user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    if (result.rows[0]) throw new ProtectedPlatformSuperadminError();
+  }
+
+  private async assertProtectedUserMutationAllowed(input: UpsertUserInput) {
+    const result = await this.db.query(
+      `SELECT admin_user.id, admin_user.email, admin_user.status
+       FROM admin.platform_role_bootstrap bootstrap
+       INNER JOIN admin.users admin_user ON admin_user.id = bootstrap.user_id
+       WHERE bootstrap.bootstrap_key = 'platform_superadmin'
+         AND (
+           ($1::uuid IS NOT NULL AND admin_user.id = $1::uuid)
+           OR lower(admin_user.email) = lower($2)
+         )
+       LIMIT 1`,
+      [input.adminUserId ?? null, input.email]
+    );
+    if (!result.rows[0]) return;
+    const protectedUser = result.rows[0] as { id: string; email: string; status: AdminUser["status"] };
+    if (
+      input.adminUserId !== protectedUser.id
+      || input.email.toLowerCase() !== protectedUser.email.toLowerCase()
+      || (input.status ?? protectedUser.status) !== "active"
+    ) {
+      throw new ProtectedPlatformSuperadminError();
     }
   }
 
@@ -557,6 +820,10 @@ export class AdminRepository {
       status: input.status ?? "active"
     };
   }
+}
+
+function isUniqueViolation(error: unknown): error is { code: string } {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
 function userSelectSql(suffix: string) {

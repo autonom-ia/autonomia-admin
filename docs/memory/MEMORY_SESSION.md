@@ -34,22 +34,22 @@ Project status:
 
 <!-- Substituir abaixo a cada nova sessão. Sessões anteriores vão para PROGRESS.md. -->
 
-## Sessão: 2026-07-13 13:02 — bloquear deploy e migration automáticos
-Issue: #8
-Branch: fix/8-production-deploy-gate
-PR: Draft #11
+## Sessão: 2026-07-13 18:29 — consolidar JWT fail-closed e ativar RBAC global
+Issue: #3 (dependências #2 e #8)
+Branch: feat/3-platform-rbac
+PR: Draft #12
 Estado: em_progresso
 Modelo: strong + human
-Arquivos alterados: CI, package.json, checker, runner/guard/testes de migration local, deploy/runbook, STATUS, memória, audit e health report
-Comandos executados: auditoria cross-repo; gate 31 fixtures; lint; Vitest; build; package ci; stage ausente/qa; túnel/banco compartilhado; entrypoint direto; YAML; Harness/Doctor
-Validação: review final independente GREEN P0=P1=P2=P3=0 no hash staged `36427dab…`; 31 fixtures, 28/28 com Postgres local, RDS/túnel bloqueado, lint/build/package/YAML/Harness verdes; migration 008 cross-project excluída do local/bloqueada para release
-Bloqueios: CI remoto do novo SHA; migration 008 precisa de substituição aditiva no Financial antes de release
-Próxima ação: commit/push da atualização da PR #11 e CI remoto, sem merge/deploy
+Arquivos alterados: auth/config/repository/routes/types; migration 012; CI; testes JWT/RBAC/migrations; README/STATUS/memória/audit/runbook; closure exato do deploy-gate
+Comandos executados: consolidação dos commits da PR #6 sobre #11; pnpm install/lint; migrate:local duas vezes; Vitest PostgreSQL/JWKS; revisão cross-repo
+Validação: gate verde; lint/build/package/audit/Harness verdes; 55/55 testes reais, zero skips; bootstrap one-shot, RBAC persistido, lockout protegido inclusive por trigger direto e em corrida, route matrix e 403 sem escrita verdes; migration 008 segue excluída do runner Local/CI
+Bloqueios: aprovação humana e merge/deploy permanecem fora deste slice
+Próxima ação: manter a Draft PR #12 em review e seguir para a Issue #4 em branch própria
 Project status:
   - Projeto: Infra
-  - Status: Ajustes
+  - Status: Em review
   - Tipo: Segurança
   - Prioridade: P0
   - Risco: Alto
-  - Ambiente: Produção
-  - Próxima ação: revisar deploy-gate; não executar release
+  - Ambiente: Local
+  - Próxima ação: Issue #4; manter a Draft PR #12 sem merge/deploy
