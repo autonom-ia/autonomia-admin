@@ -33,6 +33,8 @@ provider:
     DATABASE_SSL_REJECT_UNAUTHORIZED: ${env:DATABASE_SSL_REJECT_UNAUTHORIZED, "false"}
     AUTH_SYNC_QUEUE_URL: ${env:AUTH_SYNC_QUEUE_URL, "https://sqs.${self:provider.region}.amazonaws.com/140023375763/autonomia-auth-sync"}
     FINANCIAL_SYNC_QUEUE_URL: ${env:FINANCIAL_SYNC_QUEUE_URL, "https://sqs.${self:provider.region}.amazonaws.com/140023375763/autonomia-financial-sync"}
+    FINANCIAL_ACCESS_OUTBOX_BATCH_SIZE: ${env:FINANCIAL_ACCESS_OUTBOX_BATCH_SIZE, "10"}
+    FINANCIAL_ACCESS_OUTBOX_LEASE_SECONDS: ${env:FINANCIAL_ACCESS_OUTBOX_LEASE_SECONDS, "60"}
     JWT_ISSUER: ${env:JWT_ISSUER, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E"}
     JWT_AUDIENCE: ${env:JWT_AUDIENCE, "6amud6bb0ecrmhp5sm24slk4g6"}
     JWKS_URL: ${env:JWKS_URL, "https://cognito-idp.${self:provider.region}.amazonaws.com/us-east-1_UXFFwtF6E/.well-known/jwks.json"}
@@ -82,6 +84,18 @@ functions:
 
   migrate:
     handler: src/migrate-handler.handler
+    timeout: 120
+
+  financialAccessOutboxDispatcher:
+    handler: src/financial-access-dispatcher.handler
+    timeout: 28
+    events:
+      - schedule:
+          rate: rate(1 minute)
+          enabled: true
+
+  financialAccessReconcile:
+    handler: src/financial-access-reconcile.handler
     timeout: 120
 
 package:

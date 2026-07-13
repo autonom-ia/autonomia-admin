@@ -1156,6 +1156,22 @@ async function removeTestUsers() {
   if (!database) return;
   await database.query("DELETE FROM admin.platform_role_bootstrap");
   await database.query(
+    `DELETE FROM admin.financial_access_outbox
+     WHERE admin_user_id IN (
+       SELECT id FROM admin.users
+       WHERE email LIKE $1 OR identity_user_id = $2 OR lower(email) = lower($3)
+     )`,
+    [`%${testEmailSuffix}`, platformSuperadminSubject, platformSuperadminEmail]
+  );
+  await database.query(
+    `DELETE FROM admin.financial_access_revisions
+     WHERE admin_user_id IN (
+       SELECT id FROM admin.users
+       WHERE email LIKE $1 OR identity_user_id = $2 OR lower(email) = lower($3)
+     )`,
+    [`%${testEmailSuffix}`, platformSuperadminSubject, platformSuperadminEmail]
+  );
+  await database.query(
     "DELETE FROM admin.users WHERE email LIKE $1 OR identity_user_id = $2 OR lower(email) = lower($3)",
     [`%${testEmailSuffix}`, platformSuperadminSubject, platformSuperadminEmail]
   );

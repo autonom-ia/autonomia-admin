@@ -1,100 +1,84 @@
 # STATUS — Autonom.ia Admin
 
-Atualizado em 2026-07-13. Este snapshot separa evidência do repositório de
-controles produtivos ainda não certificados.
+Atualizado em 2026-07-13. Este snapshot descreve a branch
+`feat/14-financial-access-outbox`; não autoriza merge, migration ou deploy.
 
 ## Indicadores
 
-| Indicador | Status | Última verificação |
-|-----------|:------:|--------------------|
-| Build | verde local; package stage ci verde | 2026-07-13 |
-| Testes | 66/66, zero skips, com PostgreSQL/JWKS reais e matriz de duas organizações | 2026-07-13 |
-| CI | Drafts PR #12 e #13 verdes; #13 validada em CI remoto | 2026-07-13 |
-| Deploy produção | workflow hard-disabled; review final P0-P3=0 | 2026-07-13 |
-| Harness instalado | 2.1.2 local nesta branch | 2026-07-13 |
-| Harness drift | base 2.1.2 + overrides restritivos e secret-scan estrito | 2026-07-13 |
+| Indicador | Status | Evidência |
+|-----------|:------:|-----------|
+| Migration 014 | verde local | aplicada duas vezes em PostgreSQL 16 dedicado |
+| Testes | verde local | 80/80, zero skips |
+| Lint/build | verde local | TypeScript sem erros |
+| Package/deploy gate | pendente | hashes serão fechados após review crítico |
+| CI remoto | pendente | Draft PR ainda não aberta |
+| Deploy produção | bloqueado | workflow produtivo permanece hard-disabled |
+| Harness | 2.1.2 | regras locais restritivas preservadas |
 
 ## Estado atual
 
-Esta branch implementa a Issue #4 sobre a Draft PR #12: diretório de usuários
-tenant-scoped por `X-Organization-Id`, membership admin/member e respostas não
-enumeráveis. A `main` continua sem essas mudanças; nenhum deploy, RDS, secret
-ou dado de cliente foi tocado.
+A Issue #14 adiciona uma outbox transacional para snapshots de acesso Admin →
+Financial sobre a Draft PR #13. Nenhum RDS, SQS, Lambda, secret ou dado de
+cliente foi acessado ou alterado nesta branch.
 
-## Última mudança relevante
+A migration 014 é aditiva e cria somente no schema `admin`:
 
-- Rotas de usuários não chamam mais mutações globais: invite/activate/
-  deactivate/delete operam somente a membership selecionada e revalidam o ator
-  dentro da transação.
+- `financial_access_revisions`, com revisão monotônica por usuário;
+- `financial_access_outbox`, com payload versionado, lease, retry e auditoria;
+- revisões/outbox equivalentes para status de organizações;
+- `financial_sync_reconciliations`, para fechar a janela entre migration e
+  todos os writers novos estarem ativos;
+- backfill idempotente sem email, nome, foto ou outro PII.
 
-## O que está funcionando
+Convite, ativação/desativação, primeiro vínculo Identity, bootstrap do
+superadmin, alteração genérica de usuário e soft delete enfileiram o snapshot
+na mesma transação da mutação. Rollback da mutação também remove a revisão e o
+evento ainda não confirmados.
 
-- A baseline da Draft PR #10 tem CI e Harness verdes.
-- O repositório contém build, testes Vitest e empacotamento Serverless.
+O dispatcher usa `FOR UPDATE SKIP LOCKED`, lease token por claim, `eventId`
+estável entre retries, backoff limitado e só marca `published` depois de
+`SendMessage` bem-sucedido. Envelope e payload são comparados por constraint e
+em runtime. Payload inválido permanece pendente e auditável.
 
-## O que está quebrado / em degradação
+## Provas locais
 
-- A `main` continua em Harness 2.0.2 até as PRs empilhadas serem aprovadas.
-- Push em `main` ainda dispara migration e deploy; a correção da Issue #8 está
-  somente na Draft PR #11 e no hardening local aprovado, ainda sem merge.
-- Outbox/reconciliação do cadastro corporativo AppSell continua na Issue #7.
+- rollback atômico de usuário, revisão e outbox;
+- concorrência serializada em revisões 1 → 2;
+- fluxo convite → ativação → vínculo Identity → soft delete em revisões 1 → 4;
+- grant `financial.admin` somente por role ativa persistida;
+- backfill executado duas vezes produz um único evento e nenhum PII;
+- reconciliador captura estado alterado por writer antigo após o backfill;
+- ativação/desativação de organização produz revisões duráveis;
+- falha SQS mantém pendência; retry usa o mesmo `eventId`;
+- lease expirado é recuperado; poison payload não é publicado;
+- suíte completa: 80/80 testes, zero skipped.
 
-## Bloqueios
+## Dependência e bloqueios
 
-- Gate produtivo da Issue #8 antes de qualquer merge na `main`.
-- Prova de banco Admin dedicado antes de migrations produtivas do AppSell.
+A base consumidora é a Draft PR Financial #21, que cria a projeção em banco
+Financial dedicado e ainda não faz cutover. A ordem segura continua:
+
+1. aprovar/mergear/deployar a fundação Financial #21, incluindo ordering de
+   organização rev2→rev1;
+2. aprovar/mergear/deployar esta outbox Admin;
+3. após todos os writers novos estarem ativos, executar a reconciliação com uma
+   chave única até `usersRemaining=0` e `organizationsRemaining=0`;
+4. drenar as duas outboxes, com DLQ zero e três comparações iguais;
+5. só então alterar o resolver Financial para a projeção local.
+
+Ainda faltam review crítico, gate/package, CI remoto e aprovação humana. Não há
+autorização para merge, deploy, migration produtiva ou dispatcher real.
 
 ## Próxima ação
 
-Submeter a Draft PR #13, empilhada na #12, à aprovação humana, sem merge/deploy.
-O CI remoto e o review adversarial final estão GREEN, P0=P1=P2=P3=0. A Issue #8 permanece aberta para
-release por SHA, Environment, migration, smoke e rollback.
-
-Validação local: gate antes do install com 31 fixtures físicas; allowlists
-exatas de workflows, package/lock, Serverless, hooks/settings, `scripts/**`,
-actions, configs pnpm/npm, executáveis/symlinks, runners e stages `ci/prod`.
-O quarto review encontrou `P1=1/P2=1`: a identidade conectada não restringia o
-endereço/porta reais nem provava marker persistente no database, e o IPv6 aceito
-pelo parser falhava no `pg`. A correção limita a ferramenta ao servidor real
-`127.0.0.1:5432`, exige UUID local e dois settings de database com `setrole=0`,
-e recusa localhost/IPv6/Docker. Os 25 testes do guard e a validação completa
-estão verdes. O quinto review encontrou `P2=1`: o handler Lambda de migration
-não estava no closure de hashes e aceitava adulteração destrutiva; agora ele é
-ancorado por SHA-256 e coberto por fixture negativa. O sexto review encontrou
-`P1=1/P2=2/P3=1`: risco de testes contra RDS, closure incompleto, actions móveis
-e docs contraditórias. Testes agora exigem o DB local atestado; fontes, testes e
-configs são fixados por SHA, actions por commit, e a evidência foi alinhada.
-
-O teste PostgreSQL real também encontrou `008_rename_job_autonomia_product_key`
-alterando `financial.catalog_items`. O runner local agora a exclui; execução em
-release Admin continua bloqueada até substituição aditiva no Financial.
-
-Após a exclusão, o runner completou duas vezes no database novo
-`autonomia_admin_local`; 9 migrations Admin-only, 10 tabelas e 28/28 testes
-reais ficaram verdes. Gate/31 fixtures, lint, build, package ci, YAML e Harness
-também passaram. O review final independente do hash `36427dab…` ficou GREEN,
-com `P0=P1=P2=P3=0`.
-
-Aliases npm genéricos de migration foram removidos. `migrate:local` exige banco
-local dedicado em `127.0.0.1:5432`, UUID e settings persistentes no database;
-aliases, IPv6, Docker, túnel e RDS compartilhado são recusados. O handler Lambda
-permanece como sink manual sem invocação nos entrypoints permitidos, mas seu
-conteúdo agora é fixado pelo gate. O checker não
-autoatesta sua própria edição: o hash do patch e o review crítico são o trust
-anchor desta fase.
-
-O Doctor reporta integridade estrutural (0 erros/0 warnings); ele não compara o
-conteúdo das regras. As três regras locais de ambiente, Git e aprovação
-produtiva foram preservadas como overrides intencionais porque são mais
-restritivas. O workflow integra a correção 2.1.2 que não derruba CI quando o
-health report não existe, mas preserva o secret-scan estrito 2.0.2: nenhuma
-linha detectada é descartada por conter texto de placeholder. Isso permanece
-como override até a correção upstream da Issue agent-harness#14.
+Fechar hashes do deploy gate, obter review P0-P3=0, rodar validação completa do
+Harness 2.1.2 e abrir Draft PR empilhada na #13. Depois, implementar o cutover
+Financial em PR separada e testar o contrato cruzado com duas databases.
 
 ## Links
 
+- Issue: https://github.com/autonom-ia/autonomia-admin/issues/14
+- Base: https://github.com/autonom-ia/autonomia-admin/pull/13
+- Financial projection: https://github.com/autonom-ia/autonomia-financial/pull/21
 - Project: https://github.com/users/autonom-ia/projects/3
-- Issues: https://github.com/autonom-ia/autonomia-admin/issues
-- PRs: https://github.com/autonom-ia/autonomia-admin/pulls
-- Runbook: `docs/runbooks/production-deploy.md`
-- Health report: `docs/harness-health/doctor-20260713-143220.md`
+- Runbook: `docs/runbooks/financial-access-outbox.md`

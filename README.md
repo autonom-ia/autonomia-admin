@@ -206,6 +206,18 @@ Ao salvar uma customização de produto, a API publica `admin.product_customizat
 `FINANCIAL_SYNC_QUEUE_URL` aponta para a fila do Financial.
 Ao criar ou alterar produto/serviço no Admin, a API publica um evento para que o Financial mantenha `financial.catalog_items` sincronizado para a empresa `autonom-ia`.
 
+Mutações de acesso usam caminho diferente: convite, ativação/desativação,
+primeiro vínculo Identity, bootstrap, mudança genérica de status e soft delete
+gravam `admin.financial_access.snapshot` na outbox dentro do mesmo commit. O
+dispatcher mantém o `eventId` entre retries e só marca o evento como publicado
+após confirmação do SQS. O payload não inclui email, nome ou foto.
+
+Status de organização usa a mesma garantia em outbox própria e revisão
+monotônica. Após migration e deploy de todos os writers, o handler manual
+`financialAccessReconcile` deve ser repetido com a mesma chave de release até
+zerar usuários e organizações restantes; isso fecha mutações feitas por código
+antigo durante a janela de release.
+
 ## Escopo inicial
 
 - Usuários
@@ -238,6 +250,7 @@ Migrations atuais:
 011_add_user_soft_delete.sql
 012_add_platform_superadmin_rbac.sql
 013_add_organization_scope.sql
+014_add_financial_access_outbox.sql
 ```
 
 A migration `002` cria:
