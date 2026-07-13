@@ -4,7 +4,7 @@ import { publishProductCustomizationUpserted, publishProductUpserted } from "./a
 import { requirePrincipal } from "./auth.js";
 import { config } from "./config.js";
 import { getPool } from "./db.js";
-import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
+import { publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
 import { AdminRepository, AdminUserAccessError, LastOrganizationAdminError, OrganizationAccessError, OrganizationUserConflictError, OrganizationUserNotFoundError, ProtectedPlatformSuperadminError } from "./repository.js";
 import { ADMIN_PERMISSIONS, type AdminPermission } from "./types.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
@@ -222,11 +222,6 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post("/admin/organizations", { preHandler: requirePermission("admin.organizations.write") }, async (request, reply) => {
     const input = organizationSchema.parse(request.body);
     const organization = await admin.upsertOrganization(stripUndefined(input));
-    try {
-      await publishOrganizationFinancialUpserted(organization);
-    } catch (error) {
-      request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization financial sync publish failed");
-    }
     return reply.code(201).send(organization);
   });
   app.patch("/admin/organizations/:organizationKey", { preHandler: requirePermission("admin.organizations.write") }, async (request) => {
@@ -238,11 +233,6 @@ export async function registerRoutes(app: FastifyInstance) {
       key: params.organizationKey,
       name: input.name ?? existing?.name ?? params.organizationKey
     }));
-    try {
-      await publishOrganizationFinancialUpserted(organization);
-    } catch (error) {
-      request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization financial sync publish failed");
-    }
     return organization;
   });
 

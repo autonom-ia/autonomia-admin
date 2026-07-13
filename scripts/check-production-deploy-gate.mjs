@@ -37,28 +37,33 @@ const expectedFileHashes = {
   ".claude/settings.json": "337438ef4c53e63da75c374b38b3e28519080a31075ac584ee4bf51cb7793627",
   "package.json": "ce3acd18c6e7febc480902583f323806d11fb970396627e7054fecd25bbab401",
   "pnpm-lock.yaml": "b064cb2e4e2cfb2696bf7aedc954dada414ff581e77f0db326348e6da8ea973a",
-  "serverless.yml": "feecb9385e1a8af53d4d194b17d0a700e82ee700976e1bfa3e22199771565bae"
+  "serverless.yml": "08bd483119457354701a170a897e9591f042ae18b893c0785c73c9568ec83f11"
 };
 const expectedRuntimeFileHashes = {
   "src/auth-sync.ts": "8f45481f3e0d19bde9ebacec8a5a1229aef436e1b3d935da886b4c9ef9b019d5",
   "src/auth.ts": "61f20582bf4814f06489f8be02e62213e033cbe40328a634b53058fe780e4704",
-  "src/config.ts": "1712b059cd9493fae2c820e350d6bdcd1855f1eaf0a46fab30c063cc38abfd61",
+  "src/config.ts": "3c2329a96912df6c5c70b431f17bc1616f104cfd467c96f5cb93d838acfd7427",
   "src/db.ts": "b376cc04bad065962e4d6df1dfc293c95119efbaed45ae0239f19f579e9208ac",
   "src/fastify.d.ts": "dec5fbc0872d867b455bd0b6df1fdb7b61d1a8a1bf1ddc1f99b1389594e48e3c",
+  "src/financial-access-dispatcher.ts": "ac74fd6eb006a4b7db64e294171a8004171a3d92aef36e09317a7c60aab20e93",
+  "src/financial-access-outbox.ts": "46dab7f121d1f7a91dcee9e2c641018b8b6f9d55783995732dbccc290908a0a9",
+  "src/financial-access-reconcile.ts": "470d2af8a777a198677573c0b0a9aa14b1e73634df6da15a0886b27a28d0751d",
   "src/financial-sync.ts": "5444fbf4b0254fbb320eca3581a8f0bf06a74b6ec1d063deb00a39a8ec0bda2a",
   "src/lambda.ts": "2c0c747c3d55fa9d766c82ee30ef43ea78afb33dea2fb930db79113e7659b04e",
   "src/local-migration-guard.ts": "14d2e1ba0b51b70439acebea38459df36f7b6672111598651e425ace189ea262",
   "src/local.ts": "4dc6f946c92810e045e6a83832e773b6819634a98d27700300dae972400c6c96",
   "src/migrate-handler.ts": "c3e78610945e32fef627af047ce52358299a8a4c6a6c594585b428302e1cd7f5",
-  "src/migrate.ts": "16de71207490c251875b8a828aed1de55b6f8054c4c4916ca0b16b3375024303",
-  "src/repository.ts": "cbd7e84c43bab382885522458b81ffb4cd13a3f8bc416b36a9f9c971ed14676a",
-  "src/routes.ts": "64b9b47e9cd00b0dce5e803909c4cab53ee64b5823423d98b2a2ad99f1d6a8e6",
+  "src/migrate.ts": "6ae8d1255ff12a64079bb8634226b4754c59819b1378d12e079c313669a258f5",
+  "src/repository.ts": "c3556cb78a002f6a248d84527f9db228458ad1d36a39d74d479355621554f8f5",
+  "src/routes.ts": "c798eb4d5116bf061a06f5064880680fd585c313ca1eca7d7898fdd253977f19",
   "src/server.ts": "178c05f01d65a330456a32ed3548ead9cf45e51870b331813cebaebf0ceac720",
   "src/types.ts": "4300317254266934558bcdf72a95769a3f6daf47fde96b29c438eb5b3c330ac5",
   "src/uploads.ts": "9fc6fa53cb0d8f0c6c64c655bf0fee2782f9927071de5f10a154bd73c95c1689",
-  "tests/admin-api.test.ts": "89bc07a94f0d05fc82add31131fc910b95b2c4ba63567410cbcd179431e0f05d",
+  "tests/admin-api.test.ts": "4ebf8c74f3dd575abf1cf1e946c4137ededaa329d43cff5ef8b28e1d5ddefe57",
+  "tests/financial-access-outbox-migration.test.ts": "f4e317a164f1cdfc9893d29cf7a042a9e64b1fcc2c462b1ef4339eae5ef1346e",
+  "tests/financial-access-outbox.test.ts": "c43dde003cd20619d06bfce830f500325df88f3b72620a9982e16e9384afe747",
   "tests/fixtures/financial-catalog-schema.sql": "a900330fa7d0e1c151881c516a8e0d382cc29106081fafe89b5afbbb990db032",
-  "tests/local-migration-guard.test.ts": "1dfa3bc27a15163dc627d5b48b27c72a04346f8598812052b6aad3ff9b9e7781",
+  "tests/local-migration-guard.test.ts": "c7510b1551d347a4b97f6a85020eedb9c443a8b3a827b320be0eaa89b682697d",
   "tests/migrations.test.ts": "d5e24e3e38d39aaac2d456d1fcfb2133b19ad41e547f88f82466713192e8010b",
   "tests/organization-scope-migration.test.ts": "ce76e0ed6881c0893b4af0a2ad9fb17606139f7f073a525fbfb81d1834cc9bcb",
   "tests/rbac-migration.test.ts": "a96afb88f5e67fd10b185f5e13c380ab2b3bb071e5cfe274b49936759067bcc2",
@@ -77,7 +82,8 @@ const expectedMigrationFileHashes = {
   "database/migrations/010_configure_neuroai_registration_callback.sql": "a1d648d268f0ebedddcecc778e3dc47c1721d566f4355889a49796038def0429",
   "database/migrations/011_add_user_soft_delete.sql": "461332ca1f9bd2523279b7cc0d2b4422794165131076eb0815d3ea1abe2d05e2",
   "database/migrations/012_add_platform_superadmin_rbac.sql": "cc8f367117a256f20699e422ca5cfef2faa6bccaf4e007d21ecb5afcdde8403b",
-  "database/migrations/013_add_organization_scope.sql": "9fc3dee7371a086e651271b0363ae7af6b9815f3aa875105bfec82f3092e365d"
+  "database/migrations/013_add_organization_scope.sql": "9fc3dee7371a086e651271b0363ae7af6b9815f3aa875105bfec82f3092e365d",
+  "database/migrations/014_add_financial_access_outbox.sql": "7b04d27905c5930a8b90d7082370a69e698c45f935ebcb0e4c1ddf8a5b194262"
 };
 const expectedScripts = {
   dev: "tsx watch src/local.ts",

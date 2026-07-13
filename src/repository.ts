@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { enqueueFinancialAccessSnapshot, enqueueFinancialOrganizationSnapshot } from "./financial-access-outbox.js";
 import { ADMIN_PERMISSIONS, type AdminOrganization, type AdminOrganizationRole, type AdminOrganizationUser, type AdminPermission, type AdminProduct, type AdminProductCustomization, type AdminProfile, type AdminRole, type AdminService, type AdminStatus, type AdminUser, type ProductService } from "./types.js";
 
 export interface UpsertProductInput {
@@ -195,9 +196,10 @@ export class AdminRepository {
     }
 
     if (!input.allowFirstLink || !input.verifiedEmail) throw new AdminUserAccessError();
-    let result;
+    const client = await this.db.connect();
     try {
-      result = await this.db.query(
+      await client.query("BEGIN");
+      const result = await client.query(
         `WITH candidates AS MATERIALIZED (
            SELECT id
            FROM admin.users
@@ -225,12 +227,18 @@ export class AdminRepository {
          RETURNING users.id`,
         [input.verifiedEmail, identityUserId, input.verifiedName ?? null]
       );
+      if (!result.rows[0]) throw new AdminUserAccessError();
+      const userId = String(result.rows[0].id);
+      await enqueueFinancialAccessSnapshot(client, userId);
+      await client.query("COMMIT");
+      return this.getUserById(userId);
     } catch (error) {
+      await client.query("ROLLBACK");
       if (isUniqueViolation(error)) throw new AdminUserAccessError("Identity is already linked to another administrative user.");
       throw error;
+    } finally {
+      client.release();
     }
-    if (!result.rows[0]) throw new AdminUserAccessError();
-    return this.getUserById(String(result.rows[0].id));
   }
 
   async listUserPermissions(userId: string): Promise<AdminPermission[]> {
@@ -367,6 +375,7 @@ export class AdminRepository {
          ) VALUES ('platform_superadmin', $1, $2, $3, $4)`,
         [userId, roleId, identityUserId, input.verifiedEmail.toLowerCase()]
       );
+      await enqueueFinancialAccessSnapshot(client, userId);
       await client.query("COMMIT");
       return this.getUserById(userId);
     } catch (error) {
@@ -382,9 +391,11 @@ export class AdminRepository {
     const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey });
     const existing = input.adminUserId ? await this.getUserById(input.adminUserId).catch(() => null) : null;
     if (input.adminUserId && !existing) throw new Error("User not found.");
-
-    const result = existing
-      ? await this.db.query(
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      const result = existing
+      ? await client.query(
         `UPDATE admin.users
          SET email = $2,
              name = $3,
@@ -404,7 +415,7 @@ export class AdminRepository {
           input.status ?? existing.status
         ]
       )
-      : await this.db.query(
+      : await client.query(
         `INSERT INTO admin.users (email, name, photo_url, profile_id, status)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (email) DO UPDATE SET
@@ -423,7 +434,16 @@ export class AdminRepository {
           input.status ?? "active"
         ]
       );
-    return this.getUserById(String(result.rows[0].id));
+      const userId = String(result.rows[0].id);
+      await enqueueFinancialAccessSnapshot(client, userId);
+      await client.query("COMMIT");
+      return this.getUserById(userId);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listUserOrganizations(userId: string): Promise<AdminOrganization[]> {
@@ -608,6 +628,7 @@ export class AdminRepository {
          ON CONFLICT (user_id, organization_id) DO NOTHING`,
         [userId, organizationId, input.role ?? "member"]
       );
+      await enqueueFinancialAccessSnapshot(client, userId);
       await client.query("COMMIT");
       return this.getOrganizationUser(organizationId, userId);
     } catch (error) {
@@ -700,6 +721,7 @@ export class AdminRepository {
           [userId]
         );
       }
+      await enqueueFinancialAccessSnapshot(client, userId);
       await client.query("COMMIT");
       return this.getOrganizationUser(organizationId, userId);
     } catch (error) {
@@ -764,17 +786,29 @@ export class AdminRepository {
   }
 
   async upsertOrganization(input: UpsertOrganizationInput) {
-    const result = await this.db.query(
-      `INSERT INTO admin.organizations (id, key, name, status)
-       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4)
-       ON CONFLICT (key) DO UPDATE SET
-         name = EXCLUDED.name,
-         status = EXCLUDED.status,
-         updated_at = now()
-       RETURNING id, key, name, status, created_at, updated_at`,
-      [input.id ?? null, input.key, input.name, input.status ?? "active"]
-    );
-    return mapOrganization(result.rows[0] as DbOrganizationRow);
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `INSERT INTO admin.organizations (id, key, name, status)
+         VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4)
+         ON CONFLICT (key) DO UPDATE SET
+           name = EXCLUDED.name,
+           status = EXCLUDED.status,
+           updated_at = now()
+         RETURNING id, key, name, status, created_at, updated_at`,
+        [input.id ?? null, input.key, input.name, input.status ?? "active"]
+      );
+      const organizationId = String(result.rows[0].id);
+      await enqueueFinancialOrganizationSnapshot(client, organizationId);
+      await client.query("COMMIT");
+      return mapOrganization(result.rows[0] as DbOrganizationRow);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getUserById(userId: string) {
@@ -798,15 +832,26 @@ export class AdminRepository {
 
   async updateUserStatus(userId: string, status: AdminUser["status"]) {
     if (status !== "active") await this.assertNotBootstrappedPlatformSuperadmin(userId);
-    const result = await this.db.query(
-      `UPDATE admin.users
-       SET status = $2, updated_at = now()
-       WHERE id = $1
-       RETURNING id`,
-      [userId, status]
-    );
-    if (!result.rows[0]) throw new Error("User not found.");
-    return this.getUserById(String(result.rows[0].id));
+    const client = await this.db.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `UPDATE admin.users
+         SET status = $2, updated_at = now()
+         WHERE id = $1
+         RETURNING id`,
+        [userId, status]
+      );
+      if (!result.rows[0]) throw new Error("User not found.");
+      await enqueueFinancialAccessSnapshot(client, userId);
+      await client.query("COMMIT");
+      return this.getUserById(userId);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async softDeleteUser(userId: string) {
@@ -855,6 +900,8 @@ export class AdminRepository {
           );
         }
       }
+
+      await enqueueFinancialAccessSnapshot(client, user.id);
 
       await client.query("COMMIT");
       return this.getUserById(user.id);
