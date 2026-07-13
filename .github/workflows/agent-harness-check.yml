@@ -9,7 +9,7 @@ jobs:
   file-completeness:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Check required files (warn unless strict mode)
         run: |
           mode="warn"
@@ -36,7 +36,7 @@ jobs:
   hook-presence:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Verify hooks (informational)
         run: |
           for f in .claude/hooks/pre-tool-use.sh .claude/hooks/post-tool-use.sh; do
@@ -51,7 +51,7 @@ jobs:
   skill-integrity:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Verify skills (informational)
         run: |
           if [ ! -d "skills" ]; then
@@ -77,7 +77,7 @@ jobs:
   secret-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Scan for hardcoded secrets
         run: |
           patterns=(
@@ -103,7 +103,7 @@ jobs:
   harness-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Validate platform-manifest.json (informational)
         run: |
           if [ ! -f "platform-manifest.json" ]; then
@@ -123,7 +123,7 @@ jobs:
   memory-consistency:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Check MEMORY_SESSION for unaddressed blockers
         run: |
           if [ ! -f "docs/memory/MEMORY_SESSION.md" ]; then
@@ -139,7 +139,7 @@ jobs:
   pr-quality-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - name: Check PR template is being used
         run: |
           if [ ! -f ".github/pull_request_template.md" ]; then
@@ -154,7 +154,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Run harness self-assessment
         id: assessment
@@ -194,7 +194,7 @@ jobs:
 
       - name: Upload health report
         if: steps.assessment.outputs.skipped != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: harness-health-report-${{ github.run_id }}-${{ github.run_attempt }}
           path: docs/harness-health/doctor-*.md

@@ -11,9 +11,12 @@ stage `prod` ignora essa variável e resolve exclusivamente o SSM produtivo.
 Esta garantia cobre o repositório e o workflow GitHub. Ela não afirma que todo
 mecanismo externo da conta AWS esteja desligado.
 
-O CI aceita somente os três workflows e os scripts de pacote revisados, por
-allowlist exata. Qualquer novo workflow, step ou script exige atualização
-explícita do contrato e novo review.
+O gate roda antes do install. Ele fixa os três workflows, package/lock,
+Serverless inteiro, hooks/settings, `scripts/**`, actions locais, configurações
+do package manager, executáveis/symlinks raiz, runners Make/Task e os dois
+arquivos de stage (`ci`/`prod`). Qualquer alteração exige atualização explícita
+do contrato e novo review. O próprio checker depende do hash do patch revisado;
+branch protection/CODEOWNERS continuam requisito da release futura.
 
 ## Por que migrations foram bloqueadas
 
@@ -21,6 +24,18 @@ O fluxo anterior publicava o serviço e reaplicava todas as migrations após cad
 push em `main`. A lista inclui alterações e updates de dados existentes. Isso
 viola a regra do AppSell: produção pode receber mudanças aditivas, mas nenhum
 cliente ou projeto existente pode ser apagado, sobrescrito ou migrado sem prova.
+
+`008_rename_job_autonomia_product_key.sql` cruza a fronteira do Admin e altera
+`financial.catalog_items`. O runner local a exclui explicitamente. Ela não pode
+ser executada em release do Admin; a correção deve nascer no Financial como
+mudança aditiva, com contrato e review próprios.
+
+Os aliases npm genéricos de migration foram removidos. Existe apenas
+`migrate:local`, que exige Postgres local dedicado, marcador interno, porta 5432
+e confirmação explícita. A identidade é persistida no database com UUID local e
+validada em `pg_db_role_setting`; somente `127.0.0.1:5432` é aceito. O handler
+Lambda permanece no código como sink manual para uma futura release, mas nenhum
+entrypoint allowlisted o invoca. Reativação exige guard produtivo separado.
 
 ## Caminho de reativação
 

@@ -37,17 +37,17 @@ Project status:
 ## Sessão: 2026-07-13 13:02 — bloquear deploy e migration automáticos
 Issue: #8
 Branch: fix/8-production-deploy-gate
-PR: não aberta
+PR: Draft #11
 Estado: em_progresso
 Modelo: strong + human
-Arquivos alterados: workflow de deploy/CI, serverless, package.json, teste do gate, runbook, STATUS, memória e audit
-Comandos executados: auditoria do workflow/serverless/migrations; test:deploy-gate; lint; Vitest; build; package stage ci com DATABASE_URL dummy; validate-harness; doctor; YAML/diff check
-Validação: primeiro review RED P1=2/P2=1 por checker bypassável, DB prod substituível por env e docs legadas; segundo RED P1=1 por denylist de sinks incompleta; contrato agora usa allowlist hash dos 3 workflows e allowlist exata de scripts, DB/stage fail-closed, 9 mutações/package ci/lint/build verdes, Vitest 3/3 ignorados; novo review pendente
-Bloqueios: nenhum
-Próxima ação: validar o patch exato e obter review crítico P0-P3=0 antes de commit/push/PR
+Arquivos alterados: CI, package.json, checker, runner/guard/testes de migration local, deploy/runbook, STATUS, memória, audit e health report
+Comandos executados: auditoria cross-repo; gate 31 fixtures; lint; Vitest; build; package ci; stage ausente/qa; túnel/banco compartilhado; entrypoint direto; YAML; Harness/Doctor
+Validação: review final independente GREEN P0=P1=P2=P3=0 no hash staged `36427dab…`; 31 fixtures, 28/28 com Postgres local, RDS/túnel bloqueado, lint/build/package/YAML/Harness verdes; migration 008 cross-project excluída do local/bloqueada para release
+Bloqueios: CI remoto do novo SHA; migration 008 precisa de substituição aditiva no Financial antes de release
+Próxima ação: commit/push da atualização da PR #11 e CI remoto, sem merge/deploy
 Project status:
   - Projeto: Infra
-  - Status: Em desenvolvimento
+  - Status: Ajustes
   - Tipo: Segurança
   - Prioridade: P0
   - Risco: Alto
