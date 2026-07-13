@@ -34,22 +34,22 @@ Project status:
 
 <!-- Substituir abaixo a cada nova sessão. Sessões anteriores vão para PROGRESS.md. -->
 
-## Sessão: 2026-07-13 12:33 — atualizar Harness para 2.1.2
-Issue: #9
-Branch: docs/update-agent-harness-v1
+## Sessão: 2026-07-13 13:02 — bloquear deploy e migration automáticos
+Issue: #8
+Branch: fix/8-production-deploy-gate
 PR: não aberta
 Estado: em_progresso
 Modelo: strong + human
-Arquivos alterados: manifestos, blocos marcados em AGENTS/CLAUDE, STATUS e memória
-Comandos executados: diagnóstico; apply-harness-to-repo; install frozen; lint; test; build; validate-harness; doctor; diff review
-Validação: primeiro review RED P1=1/P2=1/P3=1 por permissões contraditórias, workflow 2.0.2 e import duplicado; segundo/terceiro reviews encontraram bypasses no filtro upstream 2.1.2; Issue agent-harness#14 criada e filtro removido, preservando scan estrito 2.0.2; lint/build verdes; testes 3/3 ignorados sem banco; Harness estrutural 0/0; novo review pendente
+Arquivos alterados: workflow de deploy/CI, serverless, package.json, teste do gate, runbook, STATUS, memória e audit
+Comandos executados: auditoria do workflow/serverless/migrations; test:deploy-gate; lint; Vitest; build; package stage ci com DATABASE_URL dummy; validate-harness; doctor; YAML/diff check
+Validação: primeiro review RED P1=2/P2=1 por checker bypassável, DB prod substituível por env e docs legadas; segundo RED P1=1 por denylist de sinks incompleta; contrato agora usa allowlist hash dos 3 workflows e allowlist exata de scripts, DB/stage fail-closed, 9 mutações/package ci/lint/build verdes, Vitest 3/3 ignorados; novo review pendente
 Bloqueios: nenhum
-Próxima ação: validar Harness, testes/build e review crítico; abrir Draft PR empilhada sobre #5
+Próxima ação: validar o patch exato e obter review crítico P0-P3=0 antes de commit/push/PR
 Project status:
   - Projeto: Infra
   - Status: Em desenvolvimento
-  - Tipo: Infra
-  - Prioridade: P1
-  - Risco: Baixo
-  - Ambiente: Dev
-  - Próxima ação: revisar atualização do Harness 2.1.2 sem merge
+  - Tipo: Segurança
+  - Prioridade: P0
+  - Risco: Alto
+  - Ambiente: Produção
+  - Próxima ação: revisar deploy-gate; não executar release

@@ -1,51 +1,43 @@
 # Deploy
 
-O `autonomia-admin` é uma API Node/Fastify publicada como Lambda via Serverless Framework.
+O `autonomia-admin` é uma API Node/Fastify empacotada para Lambda via Serverless
+Framework. O procedimento produtivo está deliberadamente desabilitado nesta
+fase da Issue #8.
 
-## Estratégia
+## Estado do repositório
 
-- GitHub Actions valida PRs com `pnpm lint`, `pnpm test` e `pnpm build`.
-- Push em `main` executa `serverless deploy`.
-- A API roda em Lambda com HTTP API Gateway.
-- Após o deploy, o workflow invoca `autonomia-admin-prod-migrate` para aplicar migrations dentro da VPC.
+- GitHub Actions valida PRs com gate, lint, testes e build.
+- Push em `main` não possui caminho de deploy neste workflow corrigido.
+- O workflow produtivo manual sempre falha antes de AWS, secrets ou Environment.
+- Nenhuma migration é invocada por workflow.
+- O stage Serverless é obrigatório.
+- Stage `ci` aceita `DATABASE_URL` explícita; `prod` resolve exclusivamente
+  `/autonomia/prod/admin/database-url` no SSM.
 
-O arquivo principal é:
+Esta descrição passa a valer somente depois de eventual merge autorizado das
+PRs empilhadas. Até lá, a `main` remota continua com o comportamento legado.
 
-```text
-serverless.yml
-```
+## Release futura
 
-## Variáveis GitHub Environment `production`
+Os requisitos restantes da Issue #8 — SHA aprovado, confirmação, kill switch,
+Environment protegido, migration validada, smoke e rollback — continuam
+abertos. Esta PR é uma fase parcial (`Refs #8`), não encerra a Issue.
+
+O procedimento e os guardrails estão em:
+
+`docs/runbooks/production-deploy.md`
+
+## Variáveis futuras do Environment `production`
 
 ```text
 AWS_REGION
 AWS_ROLE_TO_ASSUME
 ```
 
-## Variáveis Lambda
-
-```text
-CORS_ORIGINS
-DATABASE_URL
-DATABASE_POOL_MAX
-DATABASE_SSL_MODE
-DATABASE_SSL_REJECT_UNAUTHORIZED
-AUTH_SYNC_QUEUE_URL
-JWT_ISSUER
-JWT_AUDIENCE
-JWKS_URL
-AWS_REGION
-ADMIN_ASSETS_BUCKET
-ADMIN_ASSETS_PUBLIC_BASE_URL
-ADMIN_UPLOAD_URL_EXPIRES_SECONDS
-```
+Elas não são lidas pelo workflow bloqueado atual.
 
 ## Migrations
 
-As migrations rodam pela função:
-
-```text
-autonomia-admin-prod-migrate
-```
-
-Como o RDS é privado, a migration roda dentro da VPC pela própria Lambda, não no runner do GitHub.
+A função `autonomia-admin-prod-migrate` continua existente no stack publicado,
+mas não é invocada por esta branch. Reativação exige banco AppSell isolado,
+classificação aditiva das migrations e validação explícita do retorno Lambda.
