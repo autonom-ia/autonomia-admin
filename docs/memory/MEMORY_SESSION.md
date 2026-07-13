@@ -37,19 +37,19 @@ Project status:
 ## Sessão: 2026-07-13 18:29 — consolidar JWT fail-closed e ativar RBAC global
 Issue: #3 (dependências #2 e #8)
 Branch: feat/3-platform-rbac
-PR: não aberta
+PR: Draft #12
 Estado: em_progresso
 Modelo: strong + human
 Arquivos alterados: auth/config/repository/routes/types; migration 012; CI; testes JWT/RBAC/migrations; README/STATUS/memória/audit/runbook; closure exato do deploy-gate
 Comandos executados: consolidação dos commits da PR #6 sobre #11; pnpm install/lint; migrate:local duas vezes; Vitest PostgreSQL/JWKS; revisão cross-repo
 Validação: gate verde; lint/build/package/audit/Harness verdes; 55/55 testes reais, zero skips; bootstrap one-shot, RBAC persistido, lockout protegido inclusive por trigger direto e em corrida, route matrix e 403 sem escrita verdes; migration 008 segue excluída do runner Local/CI
-Bloqueios: re-review crítico final do fix de lockout; CI remoto
-Próxima ação: obter GREEN final e abrir Draft PR empilhada na #11, sem merge/deploy
+Bloqueios: CI remoto da Draft PR #12
+Próxima ação: monitorar CI e corrigir somente falha comprovada; sem merge/deploy
 Project status:
   - Projeto: Infra
-  - Status: Em desenvolvimento
+  - Status: Em review
   - Tipo: Segurança
   - Prioridade: P0
   - Risco: Alto
   - Ambiente: Local
-  - Próxima ação: review e Draft PR; não executar release
+  - Próxima ação: CI remoto da Draft PR #12; não executar release

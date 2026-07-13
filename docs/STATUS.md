@@ -9,7 +9,7 @@ controles produtivos ainda não certificados.
 |-----------|:------:|--------------------|
 | Build | verde local; package stage ci verde | 2026-07-13 |
 | Testes | 55/55, zero skips, com PostgreSQL local real e JWKS RSA; trigger do superadmin provado diretamente e em corrida | 2026-07-13 |
-| CI | JWT/RBAC consolidado localmente sobre deploy-gate; CI remoto pendente | 2026-07-13 |
+| CI | Draft PR #12 aberta sobre a #11; CI remoto em execução | 2026-07-13 |
 | Deploy produção | workflow hard-disabled; review final P0-P3=0 | 2026-07-13 |
 | Harness instalado | 2.1.2 local nesta branch | 2026-07-13 |
 | Harness drift | base 2.1.2 + overrides restritivos e secret-scan estrito | 2026-07-13 |
@@ -22,9 +22,8 @@ mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
 
 ## Última mudança relevante
 
-- O GREEN anterior da Draft PR #11 foi invalidado por um achado cross-repo: o
-  checker não cobria hooks, scripts físicos, configs do package manager e
-  plugins Serverless. O hardening está local e ainda não foi publicado.
+- O RBAC da Issue #3 recebeu review crítico final GREEN, P0=P1=P2=P3=0, e foi
+  publicado na Draft PR #12 empilhada na #11, sem merge/deploy.
 
 ## O que está funcionando
 
@@ -46,10 +45,10 @@ mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
 
 ## Próxima ação
 
-Revalidar o fix de lockout no review crítico e abrir Draft PR empilhada na #11,
-sem merge/deploy. O closure de hashes e fixtures do deploy-gate já foi
-atualizado sem relaxar o hard-disable. A Issue #8 permanece aberta
-para release por SHA, Environment, migration, smoke e rollback.
+Monitorar o CI remoto da Draft PR #12 e corrigir somente falha comprovada, sem
+merge/deploy. O closure de hashes e fixtures do deploy-gate foi atualizado sem
+relaxar o hard-disable. A Issue #8 permanece aberta para release por SHA,
+Environment, migration, smoke e rollback.
 
 Validação local: gate antes do install com 31 fixtures físicas; allowlists
 exatas de workflows, package/lock, Serverless, hooks/settings, `scripts/**`,
