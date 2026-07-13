@@ -93,7 +93,7 @@ O bearer token deve ser um access token assinado com `token_use=access`. Quando 
 `X-Identity-Token`, ele também será validado via JWKS, deverá ter `token_use=id` e o mesmo `sub` do access token.
 Tokens sem assinatura não são aceitos nem em desenvolvimento.
 
-O login nunca cria usuário, profile ou vínculo de organização. O usuário administrativo deve existir previamente
+O login comum nunca cria usuário, profile, role ou vínculo de organização. O usuário administrativo deve existir previamente
 com status `active`. No primeiro vínculo, `X-Identity-Token` é obrigatório, o email deve estar marcado como
 `email_verified=true` e o `sub` é associado ao usuário previamente provisionado com o mesmo email. Depois do vínculo,
 requisições somente com access token são aceitas pelo `sub`; claims `email`, `username` ou `cognito:username` do
@@ -102,20 +102,45 @@ access token não são usadas para localizar ou criar usuário.
 Usuários não provisionados, `inactive`, `invited` ou removidos recebem `403`. Ativação, profile e membership devem
 ser definidos pelo fluxo administrativo explícito, nunca como efeito colateral do login.
 
+### RBAC e bootstrap do superadmin
+
+As permissões globais vêm exclusivamente de `admin.user_roles → admin.roles`.
+Profile legado e membership `admin` em uma organização não concedem acesso global.
+Rotas de usuários, organizações, produtos, services e uploads verificam a
+permissão antes de parsear o payload ou executar DB/SQS/S3.
+
+O bootstrap one-shot de `comercial@autonomia.site` fica desabilitado enquanto
+`ADMIN_PLATFORM_SUPERADMIN_IDENTITY_SUB` estiver vazio. Quando configurado, o
+primeiro `GET /admin/me` exige access token e ID token assinados com o mesmo
+`sub`, `email_verified=true` e o email comercial exato. A autoridade é o `sub`
+configurado; o email é somente confirmação adicional. A transação cria/vincula
+o usuário, atribui `platform_superadmin` e grava o singleton auditável. Repetir
+o mesmo handshake é idempotente; outro `sub` falha sem escrita. Claims de email
+posteriores não concedem nem removem a role persistida.
+
+As rotas genéricas de usuário não podem convidar sobre, alterar o email/status,
+desativar ou excluir a conta registrada no singleton de bootstrap; retornam
+`409` para evitar lockout total. Uma troca futura de superadmin exige fluxo
+administrativo dedicado, break-glass auditável e review próprio.
+
+Rotas protegidas usam autenticação read-only. Primeiro vínculo por email para
+um usuário administrativo comum só é permitido em `GET /admin/me`; uma request
+negada em outra rota não atualiza nome, `identity_user_id`, produto ou fila.
+
 ## Testes com PostgreSQL real
 
-Os testes funcionais não possuem fallback ou `skip`. Antes de executá-los, disponibilize um PostgreSQL descartável,
-aplique as migrations e então rode a suíte:
+Os testes funcionais não possuem fallback ou `skip`. Use o mesmo PostgreSQL
+local dedicado e atestado da seção Local:
 
 ```bash
-createdb autonomia_admin_test
-DATABASE_URL=postgres://localhost:5432/autonomia_admin_test DATABASE_SSL_MODE=disable pnpm migrate
-DATABASE_URL=postgres://localhost:5432/autonomia_admin_test DATABASE_SSL_MODE=disable pnpm test
+pnpm migrate:local
+pnpm test
 ```
 
-O comando `pnpm test` falha se nenhum teste for executado ou se algum teste ficar pendente/skipped. A suíte recusa
-executar os testes mutativos da migration 008 fora de host local e banco cujo nome termine em `_test`; ela cobre o
-rename no schema Financial, colisão por operador e idempotência.
+O comando `pnpm test` falha se nenhum teste for executado ou se algum teste
+ficar pendente/skipped. A suíte reutiliza o guard local antes dos testes
+mutativos, cobre a migration 008 somente sobre fixture Financial descartável e
+prova JWT/JWKS, RBAC, bootstrap, idempotência e ausência de side effect no `403`.
 
 ## Banco compartilhado e testes locais
 
@@ -187,6 +212,11 @@ Migrations atuais:
 003_add_product_oauth_settings.sql
 004_add_product_service_display_order.sql
 005_create_organizations.sql
+007_add_product_background_auth.sql
+009_add_product_registration_urls.sql
+010_configure_neuroai_registration_callback.sql
+011_add_user_soft_delete.sql
+012_add_platform_superadmin_rbac.sql
 ```
 
 A migration `002` cria:

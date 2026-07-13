@@ -22,6 +22,16 @@ export function assertAuthConfiguration() {
   if (missing.length) {
     throw new Error(`JWT authentication is not configured. Missing: ${missing.join(", ")}.`);
   }
+  if (config.platformSuperadminIdentitySub && !isUuid(config.platformSuperadminIdentitySub)) {
+    throw new Error("ADMIN_PLATFORM_SUPERADMIN_IDENTITY_SUB must be a UUID when configured.");
+  }
+  if (!/^\S+@\S+\.\S+$/.test(config.platformSuperadminEmail)) {
+    throw new Error("ADMIN_PLATFORM_SUPERADMIN_EMAIL must be a valid email address.");
+  }
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export async function requirePrincipal(request: FastifyRequest): Promise<AuthenticatedPrincipal> {

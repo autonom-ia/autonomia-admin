@@ -18,6 +18,8 @@ export const config = {
   jwtIssuer: process.env.JWT_ISSUER,
   jwtAudience: process.env.JWT_AUDIENCE,
   jwksUrl: process.env.JWKS_URL,
+  platformSuperadminIdentitySub: process.env.ADMIN_PLATFORM_SUPERADMIN_IDENTITY_SUB?.trim(),
+  platformSuperadminEmail: (process.env.ADMIN_PLATFORM_SUPERADMIN_EMAIL ?? "comercial@autonomia.site").trim().toLowerCase(),
   awsRegion: process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? "us-east-1",
   assetsBucket: process.env.ADMIN_ASSETS_BUCKET,
   assetsPublicBaseUrl: process.env.ADMIN_ASSETS_PUBLIC_BASE_URL,

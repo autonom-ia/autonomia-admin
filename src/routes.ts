@@ -1,10 +1,12 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { publishProductCustomizationUpserted, publishProductUpserted } from "./auth-sync.js";
 import { requirePrincipal } from "./auth.js";
+import { config } from "./config.js";
 import { getPool } from "./db.js";
 import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
-import { AdminRepository, AdminUserAccessError } from "./repository.js";
+import { AdminRepository, AdminUserAccessError, ProtectedPlatformSuperadminError } from "./repository.js";
+import { ADMIN_PERMISSIONS, type AdminPermission } from "./types.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
 const productSchema = z.object({
@@ -90,6 +92,10 @@ const productServicesSchema = z.object({
 
 export async function registerRoutes(app: FastifyInstance) {
   const admin = new AdminRepository(getPool());
+  const requirePermission = (permission: AdminPermission) => async (request: FastifyRequest, reply: FastifyReply) => {
+    if (request.adminPermissions.includes(permission)) return;
+    return reply.code(403).send({ error: { code: "FORBIDDEN", message: "Insufficient administrative permission." } });
+  };
 
   app.get("/health", async () => ({ ok: true, service: "autonomia-admin" }));
 
@@ -112,11 +118,32 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     request.principal = principal;
     try {
-      request.adminUser = await admin.authenticateProvisionedUser({
-        identityUserId: principal.id,
-        ...(principal.verifiedEmail ? { verifiedEmail: principal.verifiedEmail } : {}),
-        ...(principal.verifiedName ? { verifiedName: principal.verifiedName } : {})
-      });
+      const requestPath = request.url.split("?", 1)[0];
+      const isMeHandshake = request.method === "GET" && requestPath === "/admin/me";
+      if (
+        isMeHandshake
+        && config.platformSuperadminIdentitySub
+        && principal.verifiedEmail?.toLowerCase() === config.platformSuperadminEmail
+        && principal.id !== config.platformSuperadminIdentitySub
+      ) {
+        throw new AdminUserAccessError("Reserved platform superadmin identity does not match.");
+      }
+      if (isMeHandshake && config.platformSuperadminIdentitySub === principal.id) {
+        request.adminUser = await admin.bootstrapPlatformSuperadmin({
+          identityUserId: principal.id,
+          ...(principal.verifiedEmail ? { verifiedEmail: principal.verifiedEmail } : {}),
+          ...(principal.verifiedName ? { verifiedName: principal.verifiedName } : {}),
+          expectedEmail: config.platformSuperadminEmail
+        });
+      } else {
+        request.adminUser = await admin.authenticateProvisionedUser({
+          identityUserId: principal.id,
+          ...(principal.verifiedEmail ? { verifiedEmail: principal.verifiedEmail } : {}),
+          ...(principal.verifiedName ? { verifiedName: principal.verifiedName } : {}),
+          allowFirstLink: isMeHandshake
+        });
+      }
+      request.adminPermissions = await admin.listUserPermissions(request.adminUser.id);
     } catch (error) {
       if (error instanceof AdminUserAccessError) {
         return reply.code(403).send({ error: { code: "FORBIDDEN", message: "Administrative user is not active." } });
@@ -130,7 +157,7 @@ export async function registerRoutes(app: FastifyInstance) {
     return {
       user,
       organizations: await admin.listUserOrganizations(user.id),
-      permissions: adminPermissions
+      permissions: request.adminPermissions
     };
   });
 
@@ -147,16 +174,16 @@ export async function registerRoutes(app: FastifyInstance) {
     }));
   });
 
-  app.post("/admin/uploads/presigned-url", async (request, reply) => {
+  app.post("/admin/uploads/presigned-url", { preHandler: requirePermission("admin.products.write") }, async (request, reply) => {
     const input = uploadUrlSchema.parse(request.body);
     return reply.code(201).send(await createUploadUrl(input));
   });
 
-  app.get("/admin/profiles", async () => admin.listProfiles());
-  app.get("/admin/permissions", async () => adminPermissions);
+  app.get("/admin/profiles", { preHandler: requirePermission("admin.users.read") }, async () => admin.listProfiles());
+  app.get("/admin/permissions", { preHandler: requirePermission("admin.users.read") }, async () => ADMIN_PERMISSIONS);
 
-  app.get("/admin/organizations", async () => admin.listOrganizations());
-  app.post("/admin/organizations", async (request, reply) => {
+  app.get("/admin/organizations", { preHandler: requirePermission("admin.organizations.read") }, async () => admin.listOrganizations());
+  app.post("/admin/organizations", { preHandler: requirePermission("admin.organizations.write") }, async (request, reply) => {
     const input = organizationSchema.parse(request.body);
     const organization = await admin.upsertOrganization(stripUndefined(input));
     try {
@@ -166,7 +193,7 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     return reply.code(201).send(organization);
   });
-  app.patch("/admin/organizations/:organizationKey", async (request) => {
+  app.patch("/admin/organizations/:organizationKey", { preHandler: requirePermission("admin.organizations.write") }, async (request) => {
     const params = request.params as { organizationKey: string };
     const existing = (await admin.listOrganizations()).find((organization) => organization.key === params.organizationKey);
     const input = organizationSchema.partial().parse(request.body);
@@ -183,8 +210,8 @@ export async function registerRoutes(app: FastifyInstance) {
     return organization;
   });
 
-  app.get("/admin/users", async () => admin.listUsers());
-  app.get("/admin/users/:userId", async (request, reply) => {
+  app.get("/admin/users", { preHandler: requirePermission("admin.users.read") }, async () => admin.listUsers());
+  app.get("/admin/users/:userId", { preHandler: requirePermission("admin.users.read") }, async (request, reply) => {
     const params = request.params as { userId: string };
     try {
       return await admin.getUser(params.userId);
@@ -192,31 +219,45 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
     }
   });
-  app.post("/admin/users/invitations", async (request, reply) => {
+  app.post("/admin/users/invitations", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
     const input = userSchema.parse(request.body);
-    return reply.code(201).send(await admin.upsertUser(stripUndefined({
-      ...input,
-      status: input.status ?? "invited"
-    })));
+    try {
+      return reply.code(201).send(await admin.upsertUser(stripUndefined({
+        ...input,
+        status: input.status ?? "invited"
+      })));
+    } catch (error) {
+      if (error instanceof ProtectedPlatformSuperadminError) {
+        return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
+      }
+      throw error;
+    }
   });
-  app.patch("/admin/users/:userId", async (request, reply) => {
+  app.patch("/admin/users/:userId", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
     const params = request.params as { userId: string };
     const existing = await admin.getUserById(params.userId).catch(() => null);
     if (!existing) {
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
     }
     const input = userSchema.partial().parse(request.body);
-    return admin.upsertUser(stripUndefined({
-      adminUserId: existing.id,
-      email: input.email ?? existing.email,
-      name: input.name ?? existing.name,
-      photoUrl: input.photoUrl ?? existing.photoUrl ?? null,
-      status: input.status ?? existing.status,
-      profileId: input.profileId ?? existing.profileId ?? null,
-      profileKey: input.profileKey ?? existing.profileKey ?? null
-    }));
+    try {
+      return await admin.upsertUser(stripUndefined({
+        adminUserId: existing.id,
+        email: input.email ?? existing.email,
+        name: input.name ?? existing.name,
+        photoUrl: input.photoUrl ?? existing.photoUrl ?? null,
+        status: input.status ?? existing.status,
+        profileId: input.profileId ?? existing.profileId ?? null,
+        profileKey: input.profileKey ?? existing.profileKey ?? null
+      }));
+    } catch (error) {
+      if (error instanceof ProtectedPlatformSuperadminError) {
+        return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
+      }
+      throw error;
+    }
   });
-  app.post("/admin/users/:userId/activate", async (request, reply) => {
+  app.post("/admin/users/:userId/activate", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
     const params = request.params as { userId: string };
     try {
       return await admin.updateUserStatus(params.userId, "active");
@@ -224,25 +265,31 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
     }
   });
-  app.post("/admin/users/:userId/deactivate", async (request, reply) => {
+  app.post("/admin/users/:userId/deactivate", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
     const params = request.params as { userId: string };
     try {
       return await admin.updateUserStatus(params.userId, "inactive");
-    } catch {
+    } catch (error) {
+      if (error instanceof ProtectedPlatformSuperadminError) {
+        return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
+      }
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
     }
   });
-  app.delete("/admin/users/:userId", async (request, reply) => {
+  app.delete("/admin/users/:userId", { preHandler: requirePermission("admin.users.write") }, async (request, reply) => {
     const params = request.params as { userId: string };
     try {
       return await admin.softDeleteUser(params.userId);
-    } catch {
+    } catch (error) {
+      if (error instanceof ProtectedPlatformSuperadminError) {
+        return reply.code(409).send({ error: { code: "CONFLICT", message: error.message } });
+      }
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "User not found." } });
     }
   });
 
-  app.get("/admin/products", async () => admin.listProducts());
-  app.post("/admin/products", async (request, reply) => {
+  app.get("/admin/products", { preHandler: requirePermission("admin.products.read") }, async () => admin.listProducts());
+  app.post("/admin/products", { preHandler: requirePermission("admin.products.write") }, async (request, reply) => {
     const input = productSchema.parse(request.body);
     let product = await admin.upsertProduct(stripUndefined(input));
     try {
@@ -259,7 +306,7 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     return reply.code(201).send(product);
   });
-  app.patch("/admin/products/:productKey", async (request) => {
+  app.patch("/admin/products/:productKey", { preHandler: requirePermission("admin.products.write") }, async (request) => {
     const params = request.params as { productKey: string };
     const existing = (await admin.listProducts()).find((product) => product.key === params.productKey);
     const input = productSchema.partial().parse(request.body);
@@ -283,11 +330,11 @@ export async function registerRoutes(app: FastifyInstance) {
     return product;
   });
 
-  app.get("/admin/products/:productId/customizations", async (request) => {
+  app.get("/admin/products/:productId/customizations", { preHandler: requirePermission("admin.products.read") }, async (request) => {
     const params = request.params as { productId: string };
     return admin.listProductCustomizations(params.productId);
   });
-  app.post("/admin/products/:productId/customizations", async (request, reply) => {
+  app.post("/admin/products/:productId/customizations", { preHandler: requirePermission("admin.products.write") }, async (request, reply) => {
     const params = request.params as { productId: string };
     const input = customizationSchema.parse(request.body);
     const product = await admin.getProductById(params.productId);
@@ -295,7 +342,7 @@ export async function registerRoutes(app: FastifyInstance) {
     await publishProductCustomizationUpserted(product, customization);
     return reply.code(201).send(customization);
   });
-  app.patch("/admin/products/:productId/customizations/:customizationId", async (request) => {
+  app.patch("/admin/products/:productId/customizations/:customizationId", { preHandler: requirePermission("admin.products.write") }, async (request) => {
     const params = request.params as { productId: string; customizationId: string };
     const existing = await admin.getProductCustomization(params.customizationId);
     const input = customizationSchema.partial().parse(request.body);
@@ -319,12 +366,12 @@ export async function registerRoutes(app: FastifyInstance) {
     return customization;
   });
 
-  app.get("/admin/products/:productId/services", async (request) => {
+  app.get("/admin/products/:productId/services", { preHandler: requirePermission("admin.products.read") }, async (request) => {
     const params = request.params as { productId: string };
     return admin.listProductServices(params.productId);
   });
 
-  app.put("/admin/products/:productId/services", async (request) => {
+  app.put("/admin/products/:productId/services", { preHandler: requirePermission("admin.products.write") }, async (request) => {
     const params = request.params as { productId: string };
     const input = productServicesSchema.parse(request.body);
     const result = await admin.replaceProductServices(params.productId, input.services ?? input.serviceIds ?? []);
@@ -344,8 +391,8 @@ export async function registerRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.get("/admin/services", async () => admin.listServices());
-  app.post("/admin/services", async (request, reply) => {
+  app.get("/admin/services", { preHandler: requirePermission("admin.services.read") }, async () => admin.listServices());
+  app.post("/admin/services", { preHandler: requirePermission("admin.services.write") }, async (request, reply) => {
     const input = serviceSchema.parse(request.body);
     const service = await admin.upsertService(stripUndefined(input));
     try {
@@ -355,7 +402,7 @@ export async function registerRoutes(app: FastifyInstance) {
     }
     return reply.code(201).send(service);
   });
-  app.patch("/admin/services/:serviceKey", async (request) => {
+  app.patch("/admin/services/:serviceKey", { preHandler: requirePermission("admin.services.write") }, async (request) => {
     const params = request.params as { serviceKey: string };
     const existing = (await admin.listServices()).find((service) => service.key === params.serviceKey);
     const input = serviceSchema.partial().parse(request.body);
@@ -372,18 +419,6 @@ export async function registerRoutes(app: FastifyInstance) {
     return service;
   });
 }
-
-const adminPermissions = [
-  "admin.users.read",
-  "admin.users.write",
-  "admin.organizations.read",
-  "admin.organizations.write",
-  "admin.products.read",
-  "admin.products.write",
-  "admin.services.read",
-  "admin.services.write",
-  "financial.admin"
-];
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;

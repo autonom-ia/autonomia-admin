@@ -129,3 +129,17 @@ export interface AuthenticatedPrincipal {
   tokenUse?: string | undefined;
   rawClaims: Record<string, unknown>;
 }
+
+export const ADMIN_PERMISSIONS = [
+  "admin.users.read",
+  "admin.users.write",
+  "admin.organizations.read",
+  "admin.organizations.write",
+  "admin.products.read",
+  "admin.products.write",
+  "admin.services.read",
+  "admin.services.write",
+  "financial.admin"
+] as const;
+
+export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];

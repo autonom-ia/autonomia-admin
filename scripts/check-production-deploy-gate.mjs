@@ -20,12 +20,13 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedWorkflowHashes = {
   "agent-harness-check.yml": "54da44abc1601840331ef13bc9d8be77e6f9b535c0814393407294fc811e1287",
-  "ci.yml": "2c164e6daf55dca5d030f8aee67deac297572032984b2a4374fbca2b08be6a86",
+  "ci.yml": "061b239a611b1008f29eb33d4e6094597bb0dd859a2e06e364c9090e4ca51c44",
   "deploy-prod.yml": "4a460c0836d7cc3238f74fdb30992e291cc2fe25f53128be4a44c2f4e8c94042"
 };
 const expectedControlFileHashes = {
   ".claude/hooks/post-tool-use.sh": "c22a6a6eebdf115e82f78fce16d05e7b9e181cef1bdb938ac17b3cd9d34f04cc",
   ".claude/hooks/pre-tool-use.sh": "df869aeec593961db55059a777cef3eae69592718835d4ed802eeb8a8dffb5a0",
+  "scripts/assert-no-skipped-tests.mjs": "b2c20a081c67f5cb3653d25de032659d0f6a2bb703609014861b5cc19072ca67",
   "scripts/check-production-deploy-gate.mjs": null,
   "scripts/harness-doctor.sh": "5551511532fb4d2cf09aafe2f5ba78310b6fa209afeee4b6c013f1424678d2c9",
   "scripts/run-local-migrations.ts": "4109ec52a16343e4abe26f29a1a25b9288f4632c48f15853fe0021912ffcb331",
@@ -34,31 +35,34 @@ const expectedControlFileHashes = {
 };
 const expectedFileHashes = {
   ".claude/settings.json": "337438ef4c53e63da75c374b38b3e28519080a31075ac584ee4bf51cb7793627",
-  "package.json": "1d9465926d79e07c060095c97663e584c33cc0b5872cd69f7fe668f763846915",
+  "package.json": "ce3acd18c6e7febc480902583f323806d11fb970396627e7054fecd25bbab401",
   "pnpm-lock.yaml": "b064cb2e4e2cfb2696bf7aedc954dada414ff581e77f0db326348e6da8ea973a",
   "serverless.yml": "feecb9385e1a8af53d4d194b17d0a700e82ee700976e1bfa3e22199771565bae"
 };
 const expectedRuntimeFileHashes = {
   "src/auth-sync.ts": "8f45481f3e0d19bde9ebacec8a5a1229aef436e1b3d935da886b4c9ef9b019d5",
-  "src/auth.ts": "2796f881ab10aeddf0addc601e7976eb23a587bdf59c89b5c3941880c0a6856b",
-  "src/config.ts": "3e7c631f0a1305f9dc769e902f379946b0b742117dbd8fa62f05f4e0bee73896",
-  "src/db.ts": "33df4725520d2ab7da6c579b9ba63c6bde9e776a0099437e09e7d19181903290",
-  "src/fastify.d.ts": "e876e290d5edb90d2b8149afb69af10ce977224c3349ee00797c26975fcfd743",
+  "src/auth.ts": "61f20582bf4814f06489f8be02e62213e033cbe40328a634b53058fe780e4704",
+  "src/config.ts": "1712b059cd9493fae2c820e350d6bdcd1855f1eaf0a46fab30c063cc38abfd61",
+  "src/db.ts": "b376cc04bad065962e4d6df1dfc293c95119efbaed45ae0239f19f579e9208ac",
+  "src/fastify.d.ts": "8d2f2aad68c9bd9dcccefd720782cb8e821dda0624a64cfb41ad864b6d9bb128",
   "src/financial-sync.ts": "5444fbf4b0254fbb320eca3581a8f0bf06a74b6ec1d063deb00a39a8ec0bda2a",
   "src/lambda.ts": "2c0c747c3d55fa9d766c82ee30ef43ea78afb33dea2fb930db79113e7659b04e",
   "src/local-migration-guard.ts": "14d2e1ba0b51b70439acebea38459df36f7b6672111598651e425ace189ea262",
   "src/local.ts": "4dc6f946c92810e045e6a83832e773b6819634a98d27700300dae972400c6c96",
   "src/migrate-handler.ts": "c3e78610945e32fef627af047ce52358299a8a4c6a6c594585b428302e1cd7f5",
-  "src/migrate.ts": "8e3b9692fce0854fdc3aba011b1834497977dd6d3fdb0dfc96b7dd8fea487809",
-  "src/repository.ts": "9db4cbba1c816a467d96a93c7ae5cfa8ad3b1cebd64cbcc6fd3116c454342e4a",
-  "src/routes.ts": "fcf0a0c1364d3f61a22518d65facc436117b7f32de119840d130c4ef2c21db06",
-  "src/server.ts": "c9ae59dfa3695514dab24e26f2c3c1ba6d5f2ce717430fb298b02a8a7e819261",
-  "src/types.ts": "f21dd14bd14bb4258948020618cd3ed5a86870b1f7bcd4fe8c20492b5d8a435d",
+  "src/migrate.ts": "5223d5aae0dfaffe4fd3850cfa0f17d04329667bb4cfc9d36ecba4abf191fead",
+  "src/repository.ts": "3d934d6c517fb241ed1e864ba850ba238f481f442de10c5c94fdace269a61b1e",
+  "src/routes.ts": "806904220604622946a51a7c7423f11b31e5078ebee710cd3e3000cfe6342e1f",
+  "src/server.ts": "178c05f01d65a330456a32ed3548ead9cf45e51870b331813cebaebf0ceac720",
+  "src/types.ts": "416f18415822f906f6a8fa929e6cfe4ebe49ca471469f90d5d1eec580c655924",
   "src/uploads.ts": "9fc6fa53cb0d8f0c6c64c655bf0fee2782f9927071de5f10a154bd73c95c1689",
-  "tests/admin-api.test.ts": "cc10b0a0976929d879393794a864c318e059ea016f795f4b67b993156d612120",
-  "tests/local-migration-guard.test.ts": "fa6d1bd655d7ffc0f81c8ab116185e000c1435758888989c02515c5b1418796c",
+  "tests/admin-api.test.ts": "7c1fc043f47aeb6f329a7cc5d5cfe5104c775443af0c54f32b57d80069b49d44",
+  "tests/fixtures/financial-catalog-schema.sql": "a900330fa7d0e1c151881c516a8e0d382cc29106081fafe89b5afbbb990db032",
+  "tests/local-migration-guard.test.ts": "3085e25b7b7d8ebf23ef138765ada08229f4d36f252fecb67330d0a3c303e2cb",
+  "tests/migrations.test.ts": "d5e24e3e38d39aaac2d456d1fcfb2133b19ad41e547f88f82466713192e8010b",
+  "tests/rbac-migration.test.ts": "a96afb88f5e67fd10b185f5e13c380ab2b3bb071e5cfe274b49936759067bcc2",
   "tsconfig.json": "9c2480c7b62003485ef30accaf3ee888d36e08c29171043be9f71e85385174b5",
-  "vitest.config.ts": "d3a3ff77a4705ecef3d40fd7ffe42f86b3b9c3f7b9e54d3587c7486edb280265"
+  "vitest.config.ts": "558cd52e00a6024ab97904bb7f3f60ad0569d9a035569d87531748ec93527c98"
 };
 const expectedMigrationFileHashes = {
   "database/migrations/001_create_admin_schema.sql": "03ee3f9bba34ba9db114bf1d035502b162c9e30bcb3203438cc6b1d032de391d",
@@ -70,14 +74,15 @@ const expectedMigrationFileHashes = {
   "database/migrations/008_rename_job_autonomia_product_key.sql": "ea18590dadb7717dc64966281d992ee0fb20e833d1d9c82e52606cf5226d1c37",
   "database/migrations/009_add_product_registration_urls.sql": "af15c67e96d16d1d91bd79347860d7ebda799da4b204a375540b5f64110a96e0",
   "database/migrations/010_configure_neuroai_registration_callback.sql": "a1d648d268f0ebedddcecc778e3dc47c1721d566f4355889a49796038def0429",
-  "database/migrations/011_add_user_soft_delete.sql": "461332ca1f9bd2523279b7cc0d2b4422794165131076eb0815d3ea1abe2d05e2"
+  "database/migrations/011_add_user_soft_delete.sql": "461332ca1f9bd2523279b7cc0d2b4422794165131076eb0815d3ea1abe2d05e2",
+  "database/migrations/012_add_platform_superadmin_rbac.sql": "cc8f367117a256f20699e422ca5cfef2faa6bccaf4e007d21ecb5afcdde8403b"
 };
 const expectedScripts = {
   dev: "tsx watch src/local.ts",
   build: "tsc -p tsconfig.json",
   start: "node dist/server.js",
   "migrate:local": "tsx scripts/run-local-migrations.ts",
-  test: "vitest run",
+  test: "vitest run --reporter=default --reporter=json --outputFile.json=.vitest-results.json && node scripts/assert-no-skipped-tests.mjs",
   "test:deploy-gate": "node scripts/check-production-deploy-gate.mjs",
   lint: "tsc -p tsconfig.json --noEmit",
   package: "serverless package --stage ci"
@@ -163,7 +168,7 @@ const physicalFixtures = [
   ["alternate Vitest workspace config", (root) => write(root, "vitest.workspace.ts", "export default [];\n")],
   ["unreviewed test file", (root) => write(root, "tests/unreviewed.test.ts", "throw new Error('unreviewed test');\n")],
   ["reviewed migration drift", (root) => append(root, "database/migrations/001_create_admin_schema.sql", "\n-- unreviewed change\n")],
-  ["unreviewed migration file", (root) => write(root, "database/migrations/012_unreviewed.sql", "SELECT 1;\n")]
+  ["unreviewed migration file", (root) => write(root, "database/migrations/013_unreviewed.sql", "SELECT 1;\n")]
 ];
 
 for (const [name, mutate] of physicalFixtures) {

@@ -8,17 +8,17 @@ controles produtivos ainda não certificados.
 | Indicador | Status | Última verificação |
 |-----------|:------:|--------------------|
 | Build | verde local; package stage ci verde | 2026-07-13 |
-| Testes | 28/28 com PostgreSQL local real | 2026-07-13 |
-| CI | hardening local aprovado; CI remoto do novo SHA pendente | 2026-07-13 |
+| Testes | 55/55, zero skips, com PostgreSQL local real e JWKS RSA; trigger do superadmin provado diretamente e em corrida | 2026-07-13 |
+| CI | JWT/RBAC consolidado localmente sobre deploy-gate; CI remoto pendente | 2026-07-13 |
 | Deploy produção | workflow hard-disabled; review final P0-P3=0 | 2026-07-13 |
 | Harness instalado | 2.1.2 local nesta branch | 2026-07-13 |
 | Harness drift | base 2.1.2 + overrides restritivos e secret-scan estrito | 2026-07-13 |
 
 ## Estado atual
 
-O serviço Admin possui Draft PRs separadas para Harness (#5/#10) e autenticação
-fail-closed (#6). A `main` ainda dispara migration e deploy produtivos em push.
-Esta branch da Issue #8 remove o caminho automático, sem tocar produção.
+Esta branch consolida o JWT fail-closed da PR #6 sobre o deploy-gate da PR #11
+e ativa RBAC global da Issue #3 somente em Local/CI. A `main` continua sem essas
+mudanças; nenhum deploy, RDS, secret ou dado de cliente foi tocado.
 
 ## Última mudança relevante
 
@@ -36,7 +36,8 @@ Esta branch da Issue #8 remove o caminho automático, sem tocar produção.
 - A `main` continua em Harness 2.0.2 até as PRs empilhadas serem aprovadas.
 - Push em `main` ainda dispara migration e deploy; a correção da Issue #8 está
   somente na Draft PR #11 e no hardening local aprovado, ainda sem merge.
-- Auth, RBAC e isolamento por organização continuam em Issues #2, #3 e #4.
+- Isolamento por organização continua na Issue #4. Outbox/reconciliação do
+  cadastro corporativo AppSell continua na Issue #7.
 
 ## Bloqueios
 
@@ -45,9 +46,10 @@ Esta branch da Issue #8 remove o caminho automático, sem tocar produção.
 
 ## Próxima ação
 
-Commitar/pushar o hardening aprovado na Draft PR #11 e validar o CI remoto, sem
-merge/deploy. A Issue #8
-permanece aberta para release por SHA, Environment, migration, smoke e rollback.
+Revalidar o fix de lockout no review crítico e abrir Draft PR empilhada na #11,
+sem merge/deploy. O closure de hashes e fixtures do deploy-gate já foi
+atualizado sem relaxar o hard-disable. A Issue #8 permanece aberta
+para release por SHA, Environment, migration, smoke e rollback.
 
 Validação local: gate antes do install com 31 fixtures físicas; allowlists
 exatas de workflows, package/lock, Serverless, hooks/settings, `scripts/**`,

@@ -14,7 +14,7 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: autonomia_admin_test
+          POSTGRES_DB: postgres
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
@@ -41,14 +41,25 @@ jobs:
       - run: node scripts/check-production-deploy-gate.mjs
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - name: Run migrations in disposable PostgreSQL
+      - name: Create attested disposable Admin database
         env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/autonomia_admin_test
-          DATABASE_SSL_MODE: disable
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          instance_id="$(node -e "console.log(crypto.randomUUID())")"
+          createdb -h 127.0.0.1 -p 5432 -U postgres autonomia_admin_local
+          psql -h 127.0.0.1 -p 5432 -U postgres -d postgres \
+            -c "ALTER DATABASE autonomia_admin_local SET app.environment = 'local'" \
+            -c "ALTER DATABASE autonomia_admin_local SET app.local_instance_id = '${instance_id}'"
+          {
+            echo "APP_ENV=local"
+            echo "ADMIN_LOCAL_MIGRATION_CONFIRM=autonomia_admin_local"
+            echo "ADMIN_LOCAL_DATABASE_INSTANCE_ID=${instance_id}"
+            echo "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/autonomia_admin_local"
+            echo "DATABASE_SSL_MODE=disable"
+          } >> "$GITHUB_ENV"
+      - name: Run migrations in disposable PostgreSQL
         run: pnpm migrate:local
       - name: Run real database and JWKS tests
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/autonomia_admin_test
-          DATABASE_SSL_MODE: disable
         run: pnpm test
       - run: pnpm build

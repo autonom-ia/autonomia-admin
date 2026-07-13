@@ -2,13 +2,17 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  assertConnectedLocalDatabase,
+  assertLocalMigrationEnvironment
+} from "../src/local-migration-guard.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error("DATABASE_URL is required. Migration tests must run against a real disposable PostgreSQL database.");
 }
 
-assertDisposableDatabase(databaseUrl);
+const localTarget = assertLocalMigrationEnvironment(process.env);
 
 const database = new Pool({ connectionString: databaseUrl, ssl: false });
 const migrationPath = join(process.cwd(), "database", "migrations", "008_rename_job_autonomia_product_key.sql");
@@ -16,6 +20,7 @@ const financialSchemaFixturePath = join(process.cwd(), "tests", "fixtures", "fin
 let migrationSql: string;
 
 beforeAll(async () => {
+  await assertConnectedLocalDatabase(database, localTarget);
   migrationSql = await readFile(migrationPath, "utf8");
   await database.query("DROP SCHEMA IF EXISTS financial CASCADE");
   await database.query(await readFile(financialSchemaFixturePath, "utf8"));
@@ -168,13 +173,5 @@ async function seedOperators(operators: Array<[id: string, key: string]>) {
       "INSERT INTO financial.operators (id, key, name) VALUES ($1, $2, $3)",
       [id, key, key]
     );
-  }
-}
-
-function assertDisposableDatabase(connectionString: string) {
-  const parsed = new URL(connectionString);
-  const databaseName = parsed.pathname.replace(/^\//, "");
-  if (!["127.0.0.1", "localhost", "::1"].includes(parsed.hostname) || !databaseName.endsWith("_test")) {
-    throw new Error("Migration tests refuse to modify a non-local or non-test database.");
   }
 }
