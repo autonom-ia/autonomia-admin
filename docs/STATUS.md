@@ -12,7 +12,7 @@ merge, migration remota ou deploy.
 | Testes | verde local | 84/84, zero skips |
 | Lint/build | verde local | TypeScript sem erros |
 | Package/deploy gate | verde local | package CI e allowlist fail-closed validados |
-| CI remoto | pendente | Draft PR ainda não aberta |
+| CI remoto | pendente | Draft PR #16 aberta sobre a #15 |
 | Deploy produção | bloqueado | workflow produtivo permanece hard-disabled |
 | Harness | 2.1.2 | regras locais restritivas preservadas |
 | Autonom.ia Sell | verde local | seed inativo e shape exato dos produtores; consumers upstream não executados |
@@ -94,10 +94,9 @@ autorização para merge, deploy, migration produtiva ou dispatcher real.
 
 ## Próxima ação
 
-Fechar a suíte completa da Issue #7, a allowlist do deploy gate e o Harness
-2.1.2; obter reviews AppSec/integração; então abrir Draft PR empilhada na #15,
-sem merge/deploy. A sincronização externa continua bloqueada até existir outbox
-de produto por destino com retry, reconciliação e read-back.
+Aguardar o CI remoto e review humano da Draft PR #16, empilhada na #15, sem
+merge/deploy. A sincronização externa continua bloqueada até existir outbox de
+produto por destino com retry, reconciliação e read-back.
 
 ## Links
 
