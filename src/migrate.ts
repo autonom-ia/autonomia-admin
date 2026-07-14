@@ -34,7 +34,8 @@ export const LOCAL_ADMIN_MIGRATIONS = [
   "011_add_user_soft_delete.sql",
   "012_add_platform_superadmin_rbac.sql",
   "013_add_organization_scope.sql",
-  "014_add_financial_access_outbox.sql"
+  "014_add_financial_access_outbox.sql",
+  "015_register_appsell_platform_product.sql"
 ] as const;
 
 export async function runMigrations(

@@ -77,9 +77,33 @@ export async function publishOrganizationFinancialUpserted(organization: AdminOr
 }
 
 export async function publishProductFinancialCatalogUpserted(product: AdminProduct) {
-  return publishFinancialCatalogItemUpserted({
+  return publishFinancialCatalogItemUpserted(productFinancialCatalogInput(product));
+}
+
+export function buildProductFinancialCatalogUpsertedEvent(
+  product: AdminProduct,
+  metadata: { eventId?: string; occurredAt?: string } = {}
+): FinancialCatalogItemUpsertedEvent {
+  return buildFinancialCatalogItemUpsertedEvent(productFinancialCatalogInput(product), metadata);
+}
+
+function productFinancialCatalogInput(product: AdminProduct): {
+  eventType: "admin.product.financial_catalog_upserted";
+  type: "product";
+  sourceId: string;
+  key: string;
+  name: string;
+  description: string | null;
+  logoUrl: string | null;
+  primaryColor: string;
+  accentColor: string;
+  registerCallbackUrl: string | null;
+  termsUrl: string | null;
+  status: "active" | "inactive";
+} {
+  return {
     eventType: "admin.product.financial_catalog_upserted",
-    type: "product",
+    type: "product" as const,
     sourceId: product.id,
     key: product.key,
     name: product.name,
@@ -90,7 +114,7 @@ export async function publishProductFinancialCatalogUpserted(product: AdminProdu
     registerCallbackUrl: product.registerCallbackUrl,
     termsUrl: product.termsUrl,
     status: product.status
-  });
+  };
 }
 
 export async function publishServiceFinancialCatalogUpserted(service: AdminService) {
@@ -123,10 +147,39 @@ async function publishFinancialCatalogItemUpserted(input: {
     throw new Error("FINANCIAL_SYNC_QUEUE_URL is required to publish financial catalog sync events.");
   }
 
-  const event: FinancialCatalogItemUpsertedEvent = {
-    eventId: randomUUID(),
+  const event = buildFinancialCatalogItemUpsertedEvent(input);
+
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: config.financialSyncQueueUrl,
+      MessageBody: JSON.stringify(event)
+    })
+  );
+
+  return event;
+}
+
+function buildFinancialCatalogItemUpsertedEvent(
+  input: {
+    eventType: FinancialCatalogItemUpsertedEvent["eventType"];
+    type: FinancialCatalogItemType;
+    sourceId: string;
+    key: string;
+    name: string;
+    description: string | null;
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    accentColor?: string | null;
+    registerCallbackUrl?: string | null;
+    termsUrl?: string | null;
+    status: "active" | "inactive";
+  },
+  metadata: { eventId?: string; occurredAt?: string } = {}
+): FinancialCatalogItemUpsertedEvent {
+  return {
+    eventId: metadata.eventId ?? randomUUID(),
     eventType: input.eventType,
-    occurredAt: new Date().toISOString(),
+    occurredAt: metadata.occurredAt ?? new Date().toISOString(),
     source: "admin",
     data: {
       operatorKey: "autonom-ia",
@@ -146,15 +199,6 @@ async function publishFinancialCatalogItemUpserted(input: {
       }
     }
   };
-
-  await sqs.send(
-    new SendMessageCommand({
-      QueueUrl: config.financialSyncQueueUrl,
-      MessageBody: JSON.stringify(event)
-    })
-  );
-
-  return event;
 }
 
 export interface ProductServicesSyncedEvent {

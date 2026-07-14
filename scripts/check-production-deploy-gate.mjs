@@ -40,7 +40,7 @@ const expectedFileHashes = {
   "serverless.yml": "08bd483119457354701a170a897e9591f042ae18b893c0785c73c9568ec83f11"
 };
 const expectedRuntimeFileHashes = {
-  "src/auth-sync.ts": "8f45481f3e0d19bde9ebacec8a5a1229aef436e1b3d935da886b4c9ef9b019d5",
+  "src/auth-sync.ts": "ff08157224595d5967ab4d23df3f09df002ec2eaadaa7b57434728bbc77f427e",
   "src/auth.ts": "61f20582bf4814f06489f8be02e62213e033cbe40328a634b53058fe780e4704",
   "src/config.ts": "3c2329a96912df6c5c70b431f17bc1616f104cfd467c96f5cb93d838acfd7427",
   "src/db.ts": "b376cc04bad065962e4d6df1dfc293c95119efbaed45ae0239f19f579e9208ac",
@@ -48,12 +48,12 @@ const expectedRuntimeFileHashes = {
   "src/financial-access-dispatcher.ts": "ac74fd6eb006a4b7db64e294171a8004171a3d92aef36e09317a7c60aab20e93",
   "src/financial-access-outbox.ts": "46dab7f121d1f7a91dcee9e2c641018b8b6f9d55783995732dbccc290908a0a9",
   "src/financial-access-reconcile.ts": "470d2af8a777a198677573c0b0a9aa14b1e73634df6da15a0886b27a28d0751d",
-  "src/financial-sync.ts": "5444fbf4b0254fbb320eca3581a8f0bf06a74b6ec1d063deb00a39a8ec0bda2a",
+  "src/financial-sync.ts": "cc017d9a7052694ccac22e0195fefd1b4f159be8764b0316bb75c401d239657e",
   "src/lambda.ts": "2c0c747c3d55fa9d766c82ee30ef43ea78afb33dea2fb930db79113e7659b04e",
   "src/local-migration-guard.ts": "14d2e1ba0b51b70439acebea38459df36f7b6672111598651e425ace189ea262",
   "src/local.ts": "4dc6f946c92810e045e6a83832e773b6819634a98d27700300dae972400c6c96",
   "src/migrate-handler.ts": "c3e78610945e32fef627af047ce52358299a8a4c6a6c594585b428302e1cd7f5",
-  "src/migrate.ts": "6ae8d1255ff12a64079bb8634226b4754c59819b1378d12e079c313669a258f5",
+  "src/migrate.ts": "372a3f9f353050fde891d052b79707b94aa81d28fa2b0665714ff5aa85f133c0",
   "src/repository.ts": "c3556cb78a002f6a248d84527f9db228458ad1d36a39d74d479355621554f8f5",
   "src/routes.ts": "c798eb4d5116bf061a06f5064880680fd585c313ca1eca7d7898fdd253977f19",
   "src/server.ts": "178c05f01d65a330456a32ed3548ead9cf45e51870b331813cebaebf0ceac720",
@@ -63,7 +63,8 @@ const expectedRuntimeFileHashes = {
   "tests/financial-access-outbox-migration.test.ts": "f4e317a164f1cdfc9893d29cf7a042a9e64b1fcc2c462b1ef4339eae5ef1346e",
   "tests/financial-access-outbox.test.ts": "c43dde003cd20619d06bfce830f500325df88f3b72620a9982e16e9384afe747",
   "tests/fixtures/financial-catalog-schema.sql": "a900330fa7d0e1c151881c516a8e0d382cc29106081fafe89b5afbbb990db032",
-  "tests/local-migration-guard.test.ts": "c7510b1551d347a4b97f6a85020eedb9c443a8b3a827b320be0eaa89b682697d",
+  "tests/appsell-platform-product.test.ts": "60d763e3817c37cb0f4891357cfb36bf4f5df2b3dd76f7876a51f8ce2954c99d",
+  "tests/local-migration-guard.test.ts": "3a9df459b41b5df8c4c531eb3e94e5f15cff5333c5296e663c7c90077eb21521",
   "tests/migrations.test.ts": "d5e24e3e38d39aaac2d456d1fcfb2133b19ad41e547f88f82466713192e8010b",
   "tests/organization-scope-migration.test.ts": "ce76e0ed6881c0893b4af0a2ad9fb17606139f7f073a525fbfb81d1834cc9bcb",
   "tests/rbac-migration.test.ts": "a96afb88f5e67fd10b185f5e13c380ab2b3bb071e5cfe274b49936759067bcc2",
@@ -83,7 +84,8 @@ const expectedMigrationFileHashes = {
   "database/migrations/011_add_user_soft_delete.sql": "461332ca1f9bd2523279b7cc0d2b4422794165131076eb0815d3ea1abe2d05e2",
   "database/migrations/012_add_platform_superadmin_rbac.sql": "cc8f367117a256f20699e422ca5cfef2faa6bccaf4e007d21ecb5afcdde8403b",
   "database/migrations/013_add_organization_scope.sql": "9fc3dee7371a086e651271b0363ae7af6b9815f3aa875105bfec82f3092e365d",
-  "database/migrations/014_add_financial_access_outbox.sql": "7b04d27905c5930a8b90d7082370a69e698c45f935ebcb0e4c1ddf8a5b194262"
+  "database/migrations/014_add_financial_access_outbox.sql": "7b04d27905c5930a8b90d7082370a69e698c45f935ebcb0e4c1ddf8a5b194262",
+  "database/migrations/015_register_appsell_platform_product.sql": "e9288c928a3ba03c12837c3b750bac1db69c7b525d8dedce9a96f0e1bff512cb"
 };
 const expectedScripts = {
   dev: "tsx watch src/local.ts",

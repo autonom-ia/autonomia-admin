@@ -16,6 +16,7 @@ const safeEnv = {
 describe("local migration guard", () => {
   it("excludes the cross-project Financial migration from the local runner", () => {
     expect(PRODUCTION_MIGRATIONS).toContain("008_rename_job_autonomia_product_key.sql");
+    expect(PRODUCTION_MIGRATIONS).not.toContain("015_register_appsell_platform_product.sql");
     expect(LOCAL_ADMIN_MIGRATIONS).not.toContain("008_rename_job_autonomia_product_key.sql");
     expect(LOCAL_ADMIN_MIGRATIONS).toEqual([
       "001_create_admin_schema.sql",
@@ -29,7 +30,8 @@ describe("local migration guard", () => {
       "011_add_user_soft_delete.sql",
       "012_add_platform_superadmin_rbac.sql",
       "013_add_organization_scope.sql",
-      "014_add_financial_access_outbox.sql"
+      "014_add_financial_access_outbox.sql",
+      "015_register_appsell_platform_product.sql"
     ]);
   });
 

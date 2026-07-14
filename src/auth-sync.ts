@@ -61,15 +61,14 @@ export interface AdminProductCustomizationUpsertedEvent {
   };
 }
 
-export async function publishProductUpserted(product: AdminProduct) {
-  if (!config.authSyncQueueUrl) {
-    throw new Error("AUTH_SYNC_QUEUE_URL is required to publish admin.product.upserted.");
-  }
-
-  const event: AdminProductUpsertedEvent = {
-    eventId: randomUUID(),
+export function buildProductUpsertedEvent(
+  product: AdminProduct,
+  metadata: { eventId?: string; occurredAt?: string } = {}
+): AdminProductUpsertedEvent {
+  return {
+    eventId: metadata.eventId ?? randomUUID(),
     eventType: "admin.product.upserted",
-    occurredAt: new Date().toISOString(),
+    occurredAt: metadata.occurredAt ?? new Date().toISOString(),
     source: "admin",
     data: {
       productId: product.id,
@@ -97,6 +96,14 @@ export async function publishProductUpserted(product: AdminProduct) {
       }
     }
   };
+}
+
+export async function publishProductUpserted(product: AdminProduct) {
+  if (!config.authSyncQueueUrl) {
+    throw new Error("AUTH_SYNC_QUEUE_URL is required to publish admin.product.upserted.");
+  }
+
+  const event = buildProductUpsertedEvent(product);
 
   await sqs.send(
     new SendMessageCommand({

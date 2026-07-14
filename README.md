@@ -2,6 +2,11 @@
 
 Backend administrativo separado do Identity Foundation.
 
+O produto comercial é **Autonom.ia Sell**. A chave `appsell` é somente um
+identificador técnico estável. O contrato corporativo inativo e seu runbook
+estão em `docs/products/autonomia-sell.md` e
+`docs/runbooks/autonomia-sell-product-registration.md`.
+
 Este serviço expõe os endpoints consumidos pelo `@autonom-ia/admin-sdk`:
 
 ```text
@@ -251,7 +256,12 @@ Migrations atuais:
 012_add_platform_superadmin_rbac.sql
 013_add_organization_scope.sql
 014_add_financial_access_outbox.sql
+015_register_appsell_platform_product.sql  # somente LOCAL_ADMIN_MIGRATIONS
 ```
+
+A migration 015 registra a Autonom.ia Sell inativa apenas no runner Local/CI.
+Ela está deliberadamente ausente de `PRODUCTION_MIGRATIONS` e sua promoção
+exige PR e aprovação próprias depois da outbox de sincronização de produto.
 
 A migration `002` cria:
 

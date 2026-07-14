@@ -34,22 +34,22 @@ Project status:
 
 <!-- Substituir abaixo a cada nova sessão. Sessões anteriores vão para PROGRESS.md. -->
 
-## Sessão: 2026-07-13 19:18 — isolar autorização por organização
-Issue: #4 (dependência #3)
-Branch: feat/4-organization-scope
-PR: #13 (Draft, empilhada na #12)
-Estado: em_review
+## Sessão: 2026-07-14 11:10 — registrar Autonom.ia Sell inativa
+Issue: #7 (dependências Draft #12/#13/#15)
+Branch: feat/7-appsell-platform-product
+PR: não aberta
+Estado: em_progresso
 Modelo: strong + human
-Arquivos alterados: types/fastify/repository/routes/migrate; migration 013; testes API/migration/guard; README/STATUS/memória/audit/runbook; closure exato do deploy-gate
-Comandos executados: investigação read-only; pnpm install/lint; migrate:local; Vitest PostgreSQL/JWKS; deploy-gate
-Validação: 66/66 testes reais, zero skips; duas organizações, selector forjado/malformado, 404 não enumerável, member sem elevação, identidade compartilhada preservada, email comercial reservado, replay 005 bloqueado, constraint exata, last-admin e revogação concorrente verdes
-Bloqueios: aprovação humana das Draft PRs empilhadas #12 e #13
-Próxima ação: aprovação da Draft PR #13, sem merge/deploy
+Arquivos alterados: migration 015; builders Auth/Financial; testes PG/contrato; migrate/guard; README/STATUS/memória/audit/docs/runbook
+Comandos executados: mapeamento cross-repo read-only; ff-only da base #15; lint; PostgreSQL 16 e Node 22 descartáveis; migrate:local; Vitest focado
+Validação: migration 001-015 verde; 84/84 testes, zero skips; focused final 4/4 com igualdade integral dos envelopes; lint/build/package/audit/deploy-gate verdes; Harness 2.1.2 CORE 0 OPTIONAL 0
+Bloqueios: integração externa bloqueada até outbox de produto e upstreams Draft; nenhuma aprovação para merge/deploy/migration remota
+Próxima ação: suíte completa, deploy gate, Harness, reviews críticos e Draft PR empilhada na #15
 Project status:
-  - Projeto: Infra
-  - Status: Em review
-  - Tipo: Segurança
+  - Projeto: Autonom.ia Dev
+  - Status: Em desenvolvimento
+  - Tipo: Feature
   - Prioridade: P0
   - Risco: Alto
   - Ambiente: Local
-  - Próxima ação: aprovação humana da Draft PR #13; manter sem merge/deploy
+  - Próxima ação: validar e abrir Draft PR da Issue #7; manter sem merge/deploy
