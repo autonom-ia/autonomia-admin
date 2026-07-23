@@ -5,9 +5,10 @@ O `autonomia-admin` é uma API Node/Fastify publicada como Lambda via Serverless
 ## Estratégia
 
 - GitHub Actions valida PRs com `pnpm lint`, `pnpm test` e `pnpm build`.
-- Push em `main` executa `serverless deploy`.
 - A API roda em Lambda com HTTP API Gateway.
-- Após o deploy, o workflow invoca `autonomia-admin-prod-migrate` para aplicar migrations dentro da VPC.
+- O workflow `deploy-prod.yml` está deliberadamente bloqueado e falha mesmo quando disparado manualmente.
+- Merge ou push em `main` não executa deploy nem migration.
+- Um novo caminho de release precisa ser certificado em mudança separada antes de reativar produção.
 
 O arquivo principal é:
 
@@ -49,3 +50,5 @@ autonomia-admin-prod-migrate
 ```
 
 Como o RDS é privado, a migration roda dentro da VPC pela própria Lambda, não no runner do GitHub.
+
+Enquanto o gate fail-closed estiver ativo, o workflow GitHub não invoca essa função.
