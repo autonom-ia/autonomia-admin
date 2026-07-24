@@ -13,6 +13,9 @@ Estas instruções complementam o AGENTS.md para Claude Code.
 - Usar `.claude/agents/` para subagentes especializados.
 - Usar `.claude/skills/` para skills sob demanda.
 - Usar hooks para sensores, bloqueios e memória quando configurados.
+- Declarar `harness` ou `superpowers` como único owner de orquestração da tarefa.
+- Seguir `docs/agent-harness/REVIEW_CONVERGENCE.md`; não iniciar correção antes da barreira de junção.
+- Manter `docs/audit/TECHNICAL_MAP.md` como mapa ponta a ponta do agente principal.
 
 ## Limites
 

@@ -102,6 +102,11 @@ Antes de compactar ou encerrar tarefa longa, atualizar MEMORY_SESSION.md.
 ## Execução
 
 - Inspecionar antes de corrigir.
+- Antes de mudança não trivial, produzir `docs/audit/TECHNICAL_MAP.md` com o fluxo ponta a ponta.
+- Declarar um único owner de orquestração (`harness` ou `superpowers`) e não duplicar gates.
+- Aguardar todos os reviewers previstos antes de corrigir; consolidar findings em uma onda por rodada.
+- Usar testes focados nas correções, suíte completa uma vez ao final e uma única revisão ampla final.
+- Depois de duas ondas, finding P1/P2 novo exige `STOP_REPLAN`.
 - Fazer mudanças pequenas e reversíveis.
 - Rodar testes/lint/typecheck/build quando aplicável.
 - Se não puder validar, explicar claramente.
