@@ -19,6 +19,7 @@ export interface UpsertProductInput {
   allowEmailPasswordLogin?: boolean | undefined;
   allowPasskeyLogin?: boolean | undefined;
   allowBackgroundAuth?: boolean | undefined;
+  enforceProductAccess?: boolean | undefined;
   accessTokenTtlSeconds?: number | undefined;
   refreshTokenTtlSeconds?: number | undefined;
   status?: AdminProduct["status"] | undefined;
@@ -334,9 +335,9 @@ export class AdminRepository {
          key, name, description, logo_url, primary_color, accent_color, register_callback_url, terms_url, oauth_client_id,
          allowed_redirect_uris, allowed_logout_uris, allowed_origins,
          allow_google_login, allow_github_login, allow_email_password_login, allow_passkey_login, allow_background_auth,
-         access_token_ttl_seconds, refresh_token_ttl_seconds, status, auth_sync_status, auth_sync_error, auth_synced_at
+         enforce_product_access, access_token_ttl_seconds, refresh_token_ttl_seconds, status, auth_sync_status, auth_sync_error, auth_synced_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 'pending', NULL, NULL)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'pending', NULL, NULL)
        ON CONFLICT (key) DO UPDATE SET
          name = EXCLUDED.name,
          description = EXCLUDED.description,
@@ -354,6 +355,7 @@ export class AdminRepository {
          allow_email_password_login = EXCLUDED.allow_email_password_login,
          allow_passkey_login = EXCLUDED.allow_passkey_login,
          allow_background_auth = EXCLUDED.allow_background_auth,
+         enforce_product_access = EXCLUDED.enforce_product_access,
          access_token_ttl_seconds = EXCLUDED.access_token_ttl_seconds,
          refresh_token_ttl_seconds = EXCLUDED.refresh_token_ttl_seconds,
          status = EXCLUDED.status,
@@ -380,6 +382,7 @@ export class AdminRepository {
         input.allowEmailPasswordLogin ?? true,
         input.allowPasskeyLogin ?? true,
         input.allowBackgroundAuth ?? false,
+        input.enforceProductAccess ?? false,
         input.accessTokenTtlSeconds ?? 3600,
         input.refreshTokenTtlSeconds ?? 2592000,
         input.status ?? "active"
@@ -637,6 +640,7 @@ function mapProduct(row: DbProductRow): AdminProduct {
     allowEmailPasswordLogin: row.allow_email_password_login,
     allowPasskeyLogin: row.allow_passkey_login,
     allowBackgroundAuth: row.allow_background_auth,
+    enforceProductAccess: row.enforce_product_access ?? false,
     accessTokenTtlSeconds: row.access_token_ttl_seconds,
     refreshTokenTtlSeconds: row.refresh_token_ttl_seconds,
     authSyncStatus: row.auth_sync_status,
@@ -757,6 +761,7 @@ interface DbProductRow {
   allow_email_password_login: boolean;
   allow_passkey_login: boolean;
   allow_background_auth: boolean;
+  enforce_product_access: boolean;
   access_token_ttl_seconds: number;
   refresh_token_ttl_seconds: number;
   auth_sync_status: AdminProduct["authSyncStatus"];

@@ -25,6 +25,7 @@ const productSchema = z.object({
   allowEmailPasswordLogin: z.boolean().optional(),
   allowPasskeyLogin: z.boolean().optional(),
   allowBackgroundAuth: z.boolean().optional(),
+  enforceProductAccess: z.boolean().optional(),
   accessTokenTtlSeconds: z.number().int().min(60).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).optional(),
   status: z.enum(["active", "inactive"]).optional()
@@ -124,7 +125,7 @@ export async function registerRoutes(app: FastifyInstance) {
     return {
       user,
       organizations: await admin.listUserOrganizations(user.id),
-      permissions: adminPermissions
+      permissions: [...adminPermissions, ...productAccessPermissions(request.principal.rawClaims)]
     };
   });
 
@@ -376,6 +377,11 @@ const adminPermissions = [
   "admin.services.write",
   "financial.admin"
 ];
+
+function productAccessPermissions(claims: Record<string, unknown>) {
+  const scope = typeof claims.scope === "string" ? claims.scope.split(/\s+/) : [];
+  return ["admin.product_access.read", "admin.product_access.write"].filter((permission) => scope.includes(permission));
+}
 
 function stripUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
