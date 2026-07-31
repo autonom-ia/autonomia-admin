@@ -54,6 +54,7 @@ export interface AdminProduct {
   allowEmailPasswordLogin: boolean;
   allowPasskeyLogin: boolean;
   allowBackgroundAuth: boolean;
+  enforceProductAccess: boolean;
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
   authSyncStatus: "pending" | "synced" | "failed";

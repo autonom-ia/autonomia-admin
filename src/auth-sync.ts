@@ -31,6 +31,7 @@ export interface AdminProductUpsertedEvent {
       allowEmailPasswordLogin: boolean;
       allowPasskeyLogin: boolean;
       allowBackgroundAuth: boolean;
+      enforceProductAccess: boolean;
       accessTokenTtlSeconds: number;
       refreshTokenTtlSeconds: number;
     };
@@ -92,6 +93,7 @@ export async function publishProductUpserted(product: AdminProduct) {
         allowEmailPasswordLogin: product.allowEmailPasswordLogin,
         allowPasskeyLogin: product.allowPasskeyLogin,
         allowBackgroundAuth: product.allowBackgroundAuth,
+        enforceProductAccess: product.enforceProductAccess,
         accessTokenTtlSeconds: product.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: product.refreshTokenTtlSeconds
       }
