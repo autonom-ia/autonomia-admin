@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { publishProductCustomizationUpserted, publishProductUpserted } from "./auth-sync.js";
+import { publishProductCustomizationUpserted, publishProductServicesAuthSynced, publishProductUpserted } from "./auth-sync.js";
 import { requirePrincipal } from "./auth.js";
 import { getPool } from "./db.js";
 import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
@@ -329,7 +329,10 @@ export async function registerRoutes(app: FastifyInstance) {
         const services = result
           .map((entry) => ({ key: serviceKeyById.get(entry.serviceId), displayOrder: entry.displayOrder }))
           .filter((entry): entry is { key: string; displayOrder: number } => Boolean(entry.key));
-        await publishProductServicesSynced(product.key, services);
+        await Promise.all([
+          publishProductServicesSynced(product.key, services),
+          publishProductServicesAuthSynced(product, services)
+        ]);
       }
     } catch (cause) {
       request.log.error({ err: cause }, "failed to publish product services sync event");

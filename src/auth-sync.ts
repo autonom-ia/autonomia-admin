@@ -62,6 +62,22 @@ export interface AdminProductCustomizationUpsertedEvent {
   };
 }
 
+export interface AdminProductServicesSyncedEvent {
+  eventId: string;
+  eventType: "admin.product.services_synced";
+  occurredAt: string;
+  source: "admin";
+  data: {
+    operatorKey: "autonom-ia";
+    operatorName: "Autonom.ia";
+    product: {
+      key: string;
+      oauthClientId: string;
+    };
+    services: Array<{ key: string; displayOrder: number }>;
+  };
+}
+
 export async function publishProductUpserted(product: AdminProduct) {
   if (!config.authSyncQueueUrl) {
     throw new Error("AUTH_SYNC_QUEUE_URL is required to publish admin.product.upserted.");
@@ -97,6 +113,37 @@ export async function publishProductUpserted(product: AdminProduct) {
         accessTokenTtlSeconds: product.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: product.refreshTokenTtlSeconds
       }
+    }
+  };
+
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: config.authSyncQueueUrl,
+      MessageBody: JSON.stringify(event)
+    })
+  );
+
+  return event;
+}
+
+export async function publishProductServicesAuthSynced(product: AdminProduct, services: Array<{ key: string; displayOrder: number }>) {
+  if (!config.authSyncQueueUrl) {
+    throw new Error("AUTH_SYNC_QUEUE_URL is required to publish admin.product.services_synced.");
+  }
+
+  const event: AdminProductServicesSyncedEvent = {
+    eventId: randomUUID(),
+    eventType: "admin.product.services_synced",
+    occurredAt: new Date().toISOString(),
+    source: "admin",
+    data: {
+      operatorKey: "autonom-ia",
+      operatorName: "Autonom.ia",
+      product: {
+        key: product.key,
+        oauthClientId: product.oauthClientId ?? product.key
+      },
+      services
     }
   };
 
