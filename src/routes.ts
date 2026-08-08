@@ -7,6 +7,14 @@ import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUps
 import { AdminRepository } from "./repository.js";
 import { createUploadUrl, getAssetObject } from "./uploads.js";
 
+const productFieldModeSchema = z.enum(["required", "optional", "hidden"]);
+const productFormFieldsSchema = z.object({
+  fullName: productFieldModeSchema,
+  email: z.literal("required").default("required"),
+  cpf: productFieldModeSchema,
+  companyName: productFieldModeSchema
+});
+
 const productSchema = z.object({
   key: z.string().min(2),
   name: z.string().min(2),
@@ -26,6 +34,8 @@ const productSchema = z.object({
   allowPasskeyLogin: z.boolean().optional(),
   allowBackgroundAuth: z.boolean().optional(),
   enforceProductAccess: z.boolean().optional(),
+  checkoutFields: productFormFieldsSchema.optional(),
+  registrationFields: productFormFieldsSchema.optional(),
   accessTokenTtlSeconds: z.number().int().min(60).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).optional(),
   status: z.enum(["active", "inactive"]).optional()
@@ -259,7 +269,9 @@ export async function registerRoutes(app: FastifyInstance) {
     let product = await admin.upsertProduct(stripUndefined({
       ...input,
       key: params.productKey,
-      name: input.name ?? existing?.name ?? params.productKey
+      name: input.name ?? existing?.name ?? params.productKey,
+      checkoutFields: input.checkoutFields ?? existing?.checkoutFields,
+      registrationFields: input.registrationFields ?? existing?.registrationFields
     }));
     try {
       await publishProductUpserted(product);
