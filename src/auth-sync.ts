@@ -20,6 +20,7 @@ export interface AdminProductUpsertedEvent {
     accentColor: string;
     registerCallbackUrl: string | null;
     termsUrl: string | null;
+    registrationFields: AdminProduct["registrationFields"];
     status: AdminProduct["status"];
     oauth: {
       clientId: string;
@@ -98,6 +99,7 @@ export async function publishProductUpserted(product: AdminProduct) {
       accentColor: product.accentColor,
       registerCallbackUrl: product.registerCallbackUrl,
       termsUrl: product.termsUrl,
+      registrationFields: product.registrationFields,
       status: product.status,
       oauth: {
         clientId: product.oauthClientId ?? product.key,

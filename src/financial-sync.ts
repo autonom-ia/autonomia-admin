@@ -24,8 +24,10 @@ export interface FinancialCatalogItemUpsertedEvent {
       logoUrl?: string | null;
       primaryColor?: string | null;
       accentColor?: string | null;
+      oauthClientId?: string | null;
       registerCallbackUrl?: string | null;
       termsUrl?: string | null;
+      checkoutFields?: AdminProduct["checkoutFields"];
       status: "active" | "inactive";
     };
   };
@@ -87,8 +89,10 @@ export async function publishProductFinancialCatalogUpserted(product: AdminProdu
     logoUrl: product.logoUrl,
     primaryColor: product.primaryColor,
     accentColor: product.accentColor,
+    oauthClientId: product.oauthClientId ?? product.key,
     registerCallbackUrl: product.registerCallbackUrl,
     termsUrl: product.termsUrl,
+    checkoutFields: product.checkoutFields,
     status: product.status
   });
 }
@@ -115,8 +119,10 @@ async function publishFinancialCatalogItemUpserted(input: {
   logoUrl?: string | null;
   primaryColor?: string | null;
   accentColor?: string | null;
+  oauthClientId?: string | null;
   registerCallbackUrl?: string | null;
   termsUrl?: string | null;
+  checkoutFields?: AdminProduct["checkoutFields"];
   status: "active" | "inactive";
 }) {
   if (!config.financialSyncQueueUrl) {
@@ -140,8 +146,10 @@ async function publishFinancialCatalogItemUpserted(input: {
         ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
         ...(input.primaryColor !== undefined ? { primaryColor: input.primaryColor } : {}),
         ...(input.accentColor !== undefined ? { accentColor: input.accentColor } : {}),
+        ...(input.oauthClientId !== undefined ? { oauthClientId: input.oauthClientId } : {}),
         ...(input.registerCallbackUrl !== undefined ? { registerCallbackUrl: input.registerCallbackUrl } : {}),
         ...(input.termsUrl !== undefined ? { termsUrl: input.termsUrl } : {}),
+        ...(input.checkoutFields !== undefined ? { checkoutFields: input.checkoutFields } : {}),
         status: input.status
       }
     }

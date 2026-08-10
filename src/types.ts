@@ -1,5 +1,21 @@
 export type AdminStatus = "active" | "inactive";
 
+export type ProductFieldMode = "required" | "optional" | "hidden";
+
+export interface ProductFormFields {
+  fullName: ProductFieldMode;
+  email: "required";
+  cpf: ProductFieldMode;
+  companyName: ProductFieldMode;
+}
+
+export const defaultProductFormFields: ProductFormFields = {
+  fullName: "required",
+  email: "required",
+  cpf: "required",
+  companyName: "optional"
+};
+
 export interface AdminUser {
   id: string;
   name: string;
@@ -55,6 +71,8 @@ export interface AdminProduct {
   allowPasskeyLogin: boolean;
   allowBackgroundAuth: boolean;
   enforceProductAccess: boolean;
+  checkoutFields: ProductFormFields;
+  registrationFields: ProductFormFields;
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
   authSyncStatus: "pending" | "synced" | "failed";
