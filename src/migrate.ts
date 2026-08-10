@@ -12,7 +12,9 @@ const migrations = [
   "008_rename_job_autonomia_product_key.sql",
   "009_add_product_registration_urls.sql",
   "010_configure_neuroai_registration_callback.sql",
-  "011_add_user_soft_delete.sql"
+  "011_add_user_soft_delete.sql",
+  "012_add_product_access_enforcement.sql",
+  "013_add_product_form_fields.sql"
 ];
 
 export async function runMigrations() {
