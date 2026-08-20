@@ -1,0 +1,81 @@
+name: Publish HUB2YOU playbook muted videos
+
+on:
+  push:
+    branches:
+      - chore/hub2you-playbook-video-links
+    paths:
+      - '.github/workflows/publish-hub2you-playbook-videos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+
+      - name: Download and mute videos
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT='public-assets/hub2you/playbook-condicoes-gerais/v1.2/videos'
+          TMP="$RUNNER_TEMP/hub2you-playbook-videos"
+          mkdir -p "$OUT" "$TMP"
+
+          urls=(
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/2026-08-19%20%2008.53.16.mov'
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/%202026-08-19%20%2008.55.48.mov'
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/%202026-08-19%20%2008.58.57.mov'
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/2026-08-19%2009.02.04.mov'
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/%202026-08-19%20%2009.03.54.mov'
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/2026-08-19%2009.04.49.mov'
+            'https://tcplgbtdodjlvforijdd.supabase.co/storage/v1/object/public/autonomia/2026-08-19%2009.08.51.mov'
+          )
+          names=(
+            '01-localizar-pdf-oficial.mp4'
+            '02-criar-projeto-e-configurar.mp4'
+            '03-inserir-instrucoes.mp4'
+            '04-testar-especialista.mp4'
+            '05-modelo-de-pergunta.mp4'
+            '06-consultas-do-dia-a-dia.mp4'
+            '07-criar-novo-projeto.mp4'
+          )
+
+          for i in "${!urls[@]}"; do
+            src="$TMP/source-$i.mov"
+            dst="$OUT/${names[$i]}"
+            echo "Downloading ${names[$i]}"
+            curl -L --fail --show-error --silent --retry 4 --retry-delay 2 --retry-all-errors -o "$src" "${urls[$i]}"
+            ffmpeg -hide_banner -loglevel error -y -i "$src" -map 0:v:0 -an -c:v libx264 -preset veryfast -crf 22 -pix_fmt yuv420p -movflags +faststart "$dst"
+            if ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$dst" | grep -q .; then
+              echo "ERROR: audio stream found in $dst" >&2
+              exit 1
+            fi
+            ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$dst"
+          done
+
+      - name: Commit published videos
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public-assets/hub2you/playbook-condicoes-gerais/v1.2/videos
+          if git diff --cached --quiet; then
+            echo 'No asset changes to commit.'
+            exit 0
+          fi
+          git commit -m 'assets: publish muted HUB2YOU playbook videos'
+          git push origin HEAD:chore/hub2you-playbook-video-links
