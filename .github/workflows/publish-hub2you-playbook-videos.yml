@@ -6,6 +6,11 @@ on:
       - chore/hub2you-playbook-video-links
     paths:
       - '.github/workflows/publish-hub2you-playbook-videos.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/publish-hub2you-playbook-videos.yml'
   workflow_dispatch:
 
 permissions:
@@ -20,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: chore/hub2you-playbook-video-links
 
       - name: Set up FFmpeg
         uses: FedericoCarboni/setup-ffmpeg@v3
