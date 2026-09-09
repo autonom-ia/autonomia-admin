@@ -77,6 +77,7 @@ const userSchema = z.object({
 const organizationSchema = z.object({
   key: z.string().min(2).regex(/^[a-z0-9][a-z0-9-]*$/),
   name: z.string().min(2),
+  billingEmail: z.string().email().nullable().optional(),
   status: z.enum(["active", "inactive"]).optional()
 });
 

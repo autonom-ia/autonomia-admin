@@ -43,6 +43,7 @@ export interface FinancialOrganizationUpsertedEvent {
       id: string;
       key: string;
       name: string;
+      billingEmail: string | null;
       status: "active" | "inactive";
     };
   };
@@ -63,6 +64,7 @@ export async function publishOrganizationFinancialUpserted(organization: AdminOr
         id: organization.id,
         key: organization.key,
         name: organization.name,
+        billingEmail: organization.billingEmail ?? null,
         status: organization.status
       }
     }
