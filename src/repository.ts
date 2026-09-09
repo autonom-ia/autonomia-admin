@@ -51,6 +51,7 @@ export interface UpsertOrganizationInput {
   id?: string | undefined;
   key: string;
   name: string;
+  billingEmail?: string | null | undefined;
   status?: AdminOrganization["status"] | undefined;
 }
 
@@ -173,6 +174,7 @@ export class AdminRepository {
          o.id,
          o.key,
          o.name,
+         o.billing_email,
          o.status,
          uo.role,
          uo.is_primary,
@@ -190,7 +192,7 @@ export class AdminRepository {
 
   async listOrganizations(): Promise<AdminOrganization[]> {
     const result = await this.db.query(
-      `SELECT id, key, name, status, created_at, updated_at
+      `SELECT id, key, name, billing_email, status, created_at, updated_at
        FROM admin.organizations
        ORDER BY name ASC`
     );
@@ -199,14 +201,15 @@ export class AdminRepository {
 
   async upsertOrganization(input: UpsertOrganizationInput) {
     const result = await this.db.query(
-      `INSERT INTO admin.organizations (id, key, name, status)
-       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4)
+      `INSERT INTO admin.organizations (id, key, name, billing_email, status)
+       VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4, $5)
        ON CONFLICT (key) DO UPDATE SET
          name = EXCLUDED.name,
+         billing_email = EXCLUDED.billing_email,
          status = EXCLUDED.status,
          updated_at = now()
-       RETURNING id, key, name, status, created_at, updated_at`,
-      [input.id ?? null, input.key, input.name, input.status ?? "active"]
+       RETURNING id, key, name, billing_email, status, created_at, updated_at`,
+      [input.id ?? null, input.key, input.name, input.billingEmail ?? null, input.status ?? "active"]
     );
     return mapOrganization(result.rows[0] as DbOrganizationRow);
   }
@@ -605,6 +608,7 @@ function mapOrganization(row: DbOrganizationRow): AdminOrganization {
     id: row.id,
     key: row.key,
     name: row.name,
+    billingEmail: row.billing_email,
     status: row.status,
     role: row.role,
     isPrimary: row.is_primary,
@@ -742,6 +746,7 @@ interface DbOrganizationRow {
   id: string;
   key: string;
   name: string;
+  billing_email: string | null;
   status: AdminOrganization["status"];
   role?: string;
   is_primary?: boolean;

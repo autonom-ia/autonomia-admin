@@ -43,6 +43,7 @@ export interface AdminOrganization {
   id: string;
   key: string;
   name: string;
+  billingEmail?: string | null | undefined;
   status: AdminStatus;
   role?: string | undefined;
   isPrimary?: boolean | undefined;
