@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { publishProductCustomizationUpserted, publishProductServicesAuthSynced, publishProductUpserted } from "./auth-sync.js";
+import { publishOrganizationAuthUpserted, publishProductCustomizationUpserted, publishProductServicesAuthSynced, publishProductUpserted } from "./auth-sync.js";
 import { requirePrincipal } from "./auth.js";
 import { getPool } from "./db.js";
 import { publishOrganizationFinancialUpserted, publishProductFinancialCatalogUpserted, publishServiceFinancialCatalogUpserted, publishProductServicesSynced } from "./financial-sync.js";
@@ -171,6 +171,11 @@ export async function registerRoutes(app: FastifyInstance) {
     } catch (error) {
       request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization financial sync publish failed");
     }
+    try {
+      await publishOrganizationAuthUpserted(organization);
+    } catch (error) {
+      request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization auth sync publish failed");
+    }
     return reply.code(201).send(organization);
   });
   app.patch("/admin/organizations/:organizationKey", async (request) => {
@@ -186,6 +191,11 @@ export async function registerRoutes(app: FastifyInstance) {
       await publishOrganizationFinancialUpserted(organization);
     } catch (error) {
       request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization financial sync publish failed");
+    }
+    try {
+      await publishOrganizationAuthUpserted(organization);
+    } catch (error) {
+      request.log.warn({ err: error, organizationId: organization.id, organizationKey: organization.key }, "organization auth sync publish failed");
     }
     return organization;
   });

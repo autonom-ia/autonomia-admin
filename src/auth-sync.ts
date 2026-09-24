@@ -1,9 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { config } from "./config.js";
-import type { AdminProduct, AdminProductCustomization } from "./types.js";
+import type { AdminOrganization, AdminProduct, AdminProductCustomization } from "./types.js";
 
 const sqs = new SQSClient({ region: config.awsRegion });
+
+export interface AdminOrganizationUpsertedEvent {
+  eventId: string;
+  eventType: "admin.organization.upserted";
+  occurredAt: string;
+  source: "admin";
+  data: {
+    organizationId: string;
+    organizationKey: string;
+    name: string;
+    status: AdminOrganization["status"];
+  };
+}
 
 export interface AdminProductUpsertedEvent {
   eventId: string;
@@ -77,6 +90,34 @@ export interface AdminProductServicesSyncedEvent {
     };
     services: Array<{ key: string; displayOrder: number }>;
   };
+}
+
+export async function publishOrganizationAuthUpserted(organization: AdminOrganization) {
+  if (!config.authSyncQueueUrl) {
+    throw new Error("AUTH_SYNC_QUEUE_URL is required to publish admin.organization.upserted.");
+  }
+
+  const event: AdminOrganizationUpsertedEvent = {
+    eventId: randomUUID(),
+    eventType: "admin.organization.upserted",
+    occurredAt: new Date().toISOString(),
+    source: "admin",
+    data: {
+      organizationId: organization.id,
+      organizationKey: organization.key,
+      name: organization.name,
+      status: organization.status
+    }
+  };
+
+  await sqs.send(
+    new SendMessageCommand({
+      QueueUrl: config.authSyncQueueUrl,
+      MessageBody: JSON.stringify(event)
+    })
+  );
+
+  return event;
 }
 
 export async function publishProductUpserted(product: AdminProduct) {
