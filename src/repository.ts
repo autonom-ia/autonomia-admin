@@ -91,17 +91,19 @@ export class AdminRepository {
     return result.rows.map(mapProfile);
   }
 
-  async findProfile(input: { profileId?: string | null | undefined; profileKey?: string | null | undefined }) {
+  async findProfile(input: { profileId?: string | null | undefined; profileKey?: string | null | undefined }, currentProfileId?: string | null) {
     if (!input.profileId && !input.profileKey) return this.getDefaultProfile();
     const result = await this.db.query(
       `SELECT id, key, name, description, status, created_at, updated_at
        FROM admin.profiles
-       WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
-          OR ($2::text IS NOT NULL AND key = $2::text)
+       WHERE (status = 'active' OR id = $3::uuid)
+         AND ($1::uuid IS NULL OR id = $1::uuid)
+         AND ($2::text IS NULL OR key = $2::text)
        LIMIT 1`,
-      [input.profileId ?? null, input.profileKey ?? null]
+      [input.profileId ?? null, input.profileKey ?? null, currentProfileId ?? null]
     );
-    return result.rows[0] ? mapProfile(result.rows[0] as DbProfileRow) : this.getDefaultProfile();
+    if (!result.rows[0]) throw new Error("Perfil informado não encontrado.");
+    return mapProfile(result.rows[0] as DbProfileRow);
   }
 
   async getDefaultProfile() {
@@ -141,8 +143,8 @@ export class AdminRepository {
   }
 
   async upsertUser(input: UpsertUserInput) {
-    const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey });
     const existing = input.id ? await this.getUserById(input.id).catch(() => null) : null;
+    const profile = await this.findProfile({ profileId: input.profileId, profileKey: input.profileKey }, existing?.profileId);
     const result = await this.db.query(
       `INSERT INTO admin.users (identity_user_id, email, name, photo_url, profile_id, status)
        VALUES ($1, $2, $3, $4, $5, $6)

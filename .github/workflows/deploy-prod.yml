@@ -62,3 +62,4 @@ jobs:
             --payload '{}' \
             /tmp/autonomia-admin-migrate-response.json
           cat /tmp/autonomia-admin-migrate-response.json
+          node -e "const result = JSON.parse(require('node:fs').readFileSync('/tmp/autonomia-admin-migrate-response.json', 'utf8')); if (result.ok !== true) throw new Error('Admin database migrations failed');"

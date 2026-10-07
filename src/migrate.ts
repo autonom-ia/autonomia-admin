@@ -15,7 +15,8 @@ const migrations = [
   "011_add_user_soft_delete.sql",
   "012_add_product_access_enforcement.sql",
   "013_add_product_form_fields.sql",
-  "014_add_organization_billing_email.sql"
+  "014_add_organization_billing_email.sql",
+  "015_financial_profile.sql"
 ];
 
 export async function runMigrations() {
