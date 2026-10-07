@@ -25,6 +25,12 @@ DO $$ BEGIN
         WHERE a.user_id = u.id AND c.client_id = 'neuroai-web' AND a.metadata->>'managedModules' = 'true');
   END IF;
   IF to_regclass('auth.invitations') IS NOT NULL THEN
+    UPDATE admin.users target SET profile_id = p.id, updated_at = now()
+    FROM admin.profiles p
+    WHERE p.key = 'financial' AND target.status = 'invited' AND target.deleted_at IS NULL
+      AND EXISTS (SELECT 1 FROM auth.invitations i WHERE i.email_normalized = lower(target.email)
+        AND i.status = 'pending' AND i.expires_at > now()
+        AND i.metadata->>'managedModules' = 'true' AND i.metadata->>'clientId' = 'neuroai-web');
     INSERT INTO admin.users (email, name, profile_id, status)
     SELECT DISTINCT ON (i.email_normalized) i.email_normalized, COALESCE(NULLIF(i.full_name, ''), i.email), p.id, 'invited'
     FROM auth.invitations i CROSS JOIN admin.profiles p

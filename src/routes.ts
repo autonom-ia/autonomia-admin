@@ -226,8 +226,8 @@ export async function registerRoutes(app: FastifyInstance) {
       name: input.name ?? existing?.name ?? params.userId,
       photoUrl: input.photoUrl ?? existing?.photoUrl ?? null,
       status: input.status ?? existing?.status ?? "active",
-      profileId: input.profileId ?? existing?.profileId ?? null,
-      profileKey: input.profileKey ?? existing?.profileKey ?? null
+      profileId: input.profileId ?? (input.profileKey ? null : existing?.profileId ?? null),
+      profileKey: input.profileKey ?? (input.profileId ? null : existing?.profileKey ?? null)
     }));
   });
   app.post("/admin/users/:userId/activate", async (request, reply) => {
