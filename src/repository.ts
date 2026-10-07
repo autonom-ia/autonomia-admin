@@ -96,12 +96,13 @@ export class AdminRepository {
     const result = await this.db.query(
       `SELECT id, key, name, description, status, created_at, updated_at
        FROM admin.profiles
-       WHERE ($1::uuid IS NOT NULL AND id = $1::uuid)
-          OR ($2::text IS NOT NULL AND key = $2::text)
+       WHERE status = 'active' AND (($1::uuid IS NOT NULL AND id = $1::uuid)
+          OR ($2::text IS NOT NULL AND key = $2::text))
        LIMIT 1`,
       [input.profileId ?? null, input.profileKey ?? null]
     );
-    return result.rows[0] ? mapProfile(result.rows[0] as DbProfileRow) : this.getDefaultProfile();
+    if (!result.rows[0]) throw new Error("Perfil informado não encontrado.");
+    return mapProfile(result.rows[0] as DbProfileRow);
   }
 
   async getDefaultProfile() {
